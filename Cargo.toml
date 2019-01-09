@@ -1,0 +1,10 @@
+[package]
+name = "rust-dataframe"
+version = "0.0.1"
+authors = ["Neville Dipale <nevilledips@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+#arrow = { git = "https://github.com/apache/arrow"}
+arrow = { path = "../../arrow/rust"}
+num = "0.2"
