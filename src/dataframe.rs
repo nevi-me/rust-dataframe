@@ -14,20 +14,20 @@ fn make_array(data: ArrayDataRef) -> ArrayRef {
     // TODO: here data_type() needs to clone the type - maybe add a type tag enum to
     // avoid the cloning.
     match data.data_type().clone() {
-        DataType::Boolean => Arc::new(BooleanArray::from(data)) as ArrayRef,
-        DataType::Int8 => Arc::new(Int8Array::from(data)) as ArrayRef,
-        DataType::Int16 => Arc::new(Int16Array::from(data)) as ArrayRef,
-        DataType::Int32 => Arc::new(Int32Array::from(data)) as ArrayRef,
-        DataType::Int64 => Arc::new(Int64Array::from(data)) as ArrayRef,
-        DataType::UInt8 => Arc::new(UInt8Array::from(data)) as ArrayRef,
-        DataType::UInt16 => Arc::new(UInt16Array::from(data)) as ArrayRef,
-        DataType::UInt32 => Arc::new(UInt32Array::from(data)) as ArrayRef,
-        DataType::UInt64 => Arc::new(UInt64Array::from(data)) as ArrayRef,
-        DataType::Float32 => Arc::new(Float32Array::from(data)) as ArrayRef,
-        DataType::Float64 => Arc::new(Float64Array::from(data)) as ArrayRef,
-        DataType::Utf8 => Arc::new(BinaryArray::from(data)) as ArrayRef,
-        DataType::List(_) => Arc::new(ListArray::from(data)) as ArrayRef,
-        DataType::Struct(_) => Arc::new(StructArray::from(data)) as ArrayRef,
+        DataType::Boolean => Arc::new(array::BooleanArray::from(data)) as ArrayRef,
+        DataType::Int8 => Arc::new(array::Int8Array::from(data)) as ArrayRef,
+        DataType::Int16 => Arc::new(array::Int16Array::from(data)) as ArrayRef,
+        DataType::Int32 => Arc::new(array::Int32Array::from(data)) as ArrayRef,
+        DataType::Int64 => Arc::new(array::Int64Array::from(data)) as ArrayRef,
+        DataType::UInt8 => Arc::new(array::UInt8Array::from(data)) as ArrayRef,
+        DataType::UInt16 => Arc::new(array::UInt16Array::from(data)) as ArrayRef,
+        DataType::UInt32 => Arc::new(array::UInt32Array::from(data)) as ArrayRef,
+        DataType::UInt64 => Arc::new(array::UInt64Array::from(data)) as ArrayRef,
+        DataType::Float32 => Arc::new(array::Float32Array::from(data)) as ArrayRef,
+        DataType::Float64 => Arc::new(array::Float64Array::from(data)) as ArrayRef,
+        DataType::Utf8 => Arc::new(array::BinaryArray::from(data)) as ArrayRef,
+        DataType::List(_) => Arc::new(array::ListArray::from(data)) as ArrayRef,
+        DataType::Struct(_) => Arc::new(array::StructArray::from(data)) as ArrayRef,
         dt => panic!("Unexpected data type {:?}", dt),
     }
 }
@@ -174,7 +174,7 @@ impl DataFrame {
     /// Returns dataframe with specified columns selected.
     ///
     /// If a column name does not exist, it is omitted
-    fn select(&self, col_names: Vec<&str>) -> Self {
+    pub fn select(&self, col_names: Vec<&str>) -> Self {
         // get the names of columns from the schema, and match them with supplied
         let mut col_num: i16 = -1;
         let schema = self.schema.clone();
@@ -195,6 +195,43 @@ impl DataFrame {
             field_names
                 .into_iter()
                 .filter(|(col, name)| col_names.contains(name))
+                .collect()
+        };
+
+        // construct dataframe with selected columns
+        DataFrame {
+            schema: Arc::new(Schema::new(
+                filter_cols
+                    .iter()
+                    .map(|c| schema.field(c.0).clone())
+                    .collect(),
+            )),
+            columns: filter_cols
+                .into_iter()
+                .map(move |c| self.columns[c.0].clone())
+                .collect(),
+        }
+    }
+
+    pub fn drop(&self, col_names: Vec<&str>) -> Self {
+        // get the names of columns from the schema, and match them with supplied
+        let mut col_num: i16 = -1;
+        let schema = self.schema.clone();
+        let field_names: Vec<(usize, &str)> = schema
+            .fields()
+            .into_iter()
+            .map(|c| {
+                col_num += 1;
+                (col_num as usize, c.name().as_str())
+            })
+            .collect();
+
+        // filter names
+        let filter_cols: Vec<(usize, &str)> = {
+            // TODO follow the order of user-supplied column names
+            field_names
+                .into_iter()
+                .filter(|(col, name)| !col_names.contains(name))
                 .collect()
         };
 
@@ -259,6 +296,7 @@ impl DataFrame {
 }
 
 mod tests {
+    use arrow::array::Float64Array;
     use crate::dataframe::DataFrame;
     use crate::functions::scalar::ScalarFunctions;
     use std::sync::Arc;
@@ -281,18 +319,36 @@ mod tests {
 
     #[test]
     fn dataframe_ops() {
-        let mut df = DataFrame::empty();
-//        let a = df.column_by_name("a");
-//        let b = df.column_by_name("b");
-//
-//        df = df.with_column(
-//            "test_column",
-//            Arc::new(ScalarFunctions::divide(
-//                a.into(), b.into()
-//            ).unwrap()),
-//        );
+        let mut dataframe = DataFrame::from_csv("./test/data/uk_cities_with_headers.csv", None);
+        let a = dataframe.column_by_name("lat").as_ref();
+        let b = dataframe.column_by_name("lng").as_ref();
+        let sum = ScalarFunctions::add(
+            a.as_any().downcast_ref::<Float64Array>().unwrap(), 
+            b.as_any().downcast_ref::<Float64Array>().unwrap()
+        );
+        dataframe = dataframe.with_column("lat_lng_sum", Arc::new(sum.unwrap()));
 
-        assert_eq!(0, df.num_columns());
-        assert_eq!(0, df.schema().fields().len());
+        assert_eq!(4, dataframe.num_columns());
+        assert_eq!(4, dataframe.schema().fields().len());
+        assert_eq!(54.31776, dataframe.column_by_name("lat_lng_sum").as_any().downcast_ref::<Float64Array>().unwrap().value(0));
+
+        dataframe = dataframe.with_column_renamed("lat_lng_sum", "ll_sum");
+
+        assert_eq!("ll_sum", dataframe.schema().field(3).name());
+
+        dataframe = dataframe.select(vec!["*"]);
+
+        assert_eq!(4, dataframe.num_columns());
+        assert_eq!(4, dataframe.schema().fields().len());
+
+        let df2 = dataframe.select(vec!["lat", "lng"]);
+
+        assert_eq!(2, df2.num_columns());
+        assert_eq!(2, df2.schema().fields().len());
+
+        // drop columns from `dataframe`
+        let df3 = dataframe.drop(vec!["city", "ll_sum"]);
+
+        assert_eq!(df2.schema().fields(), df3.schema().fields());
     }
 }
