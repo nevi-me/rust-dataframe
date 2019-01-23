@@ -1,14 +1,14 @@
-#[cfg(test)]
-//use std::fs::File;
-use std::sync::Arc;
-
-use arrow::array::*;
+use arrow::array;
+use arrow::array::{Array, ArrayRef};
 use arrow::array_data::ArrayDataBuilder;
 use arrow::array_data::ArrayDataRef;
 use arrow::csv::Reader as CsvReader;
+use arrow::csv::ReaderBuilder as CsvReaderBuilder;
 use arrow::datatypes::*;
 //use arrow::error::ArrowError;
 use arrow::record_batch::RecordBatch;
+use std::sync::Arc;
+use std::fs::File;
 
 fn make_array(data: ArrayDataRef) -> ArrayRef {
     // TODO: here data_type() needs to clone the type - maybe add a type tag enum to
@@ -111,7 +111,6 @@ impl DataFrame {
         let column = &self.columns[column_number.0];
         let field = self.schema.field(column_number.0);
         column
-
     }
 
     /// Returns a new `DataFrame` with column appended.
@@ -214,13 +213,49 @@ impl DataFrame {
         }
     }
 
-    //    fn from_csv(path: &str, schema: Option<Arc<Schema>>) -> Self {
-    //        let file = File::open(path).unwrap();
-    //        let reader = CsvReader::new(file, schema.unwrap(), true, 1024, None);
-    //        let batch: RecordBatch = reader.next().unwrap();
-    //
-    //        batch
-    //    }
+    pub fn from_table(table: arrow::table::Table) -> Self {
+        DataFrame {
+            schema: table.schema().clone(),
+            columns: table.columns()
+        }
+    }
+
+    pub fn from_csv(path: &str, schema: Option<Arc<Schema>>) -> Self {
+        let file = File::open(path).unwrap();
+        let mut reader = match schema {
+            Some(schema) => CsvReader::new(file, schema, true, 1024, None),
+            None => {
+                let builder = CsvReaderBuilder::new().infer_schema(None).has_headers(true).with_batch_size(6);
+                builder.build(file).unwrap()
+            }
+        };
+        let mut batches: Vec<RecordBatch> = vec![];
+        let mut has_next = true;
+        while has_next {
+            match reader.next() {
+                Ok(batch) => {
+                    match batch {
+                        Some(batch) => {
+                            batches.push(batch);
+                        },
+                        None => {
+                            has_next = false;
+                        }
+                    }
+                },
+                Err(e) => {
+                    has_next = false;
+                }
+            }
+        }
+
+        let schema: Arc<Schema> = batches[0].schema().clone();
+
+        // convert to an arrow table
+        let table = arrow::table::Table::from_record_batches(schema, batches);
+
+        DataFrame::from_table(table)
+    }
 }
 
 mod tests {
@@ -234,6 +269,14 @@ mod tests {
 
         assert_eq!(0, dataframe.num_columns());
         assert_eq!(0, dataframe.schema().fields().len());
+    }
+
+    #[test]
+    fn read_csv_to_dataframe() {
+        let dataframe = DataFrame::from_csv("./test/data/uk_cities_with_headers.csv", None);
+
+        assert_eq!(3, dataframe.num_columns());
+        assert_eq!(37, dataframe.num_rows());
     }
 
     #[test]
