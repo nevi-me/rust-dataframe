@@ -72,27 +72,27 @@ impl ScalarFunctions {
 
     /// Compute the absolute of a numeric array
     pub fn abs<T>(array: &PrimitiveArray<T>) -> Result<PrimitiveArray<T>, ArrowError>
-        where
-           T: ArrowNumericType,
-           T::Native: Add<Output = T::Native>
-           + Sub<Output = T::Native>
-           + Mul<Output = T::Native>
-           + Div<Output = T::Native>
-           + Zero
-           + Signed,
-   {
-       let mut b = PrimitiveBuilder::<T>::new(array.len());
-       for i in 0..array.len() {
-           let index = i;
-           if array.is_null(i) {
-               b.append_null()?
-           } else {
-               let value: T::Native = array.value(i);
-               b.append_value(abs(array.value(i)))?
-           }
-       }
-       Ok(b.finish())
-   }
+    where
+        T: ArrowNumericType,
+        T::Native: Add<Output = T::Native>
+            + Sub<Output = T::Native>
+            + Mul<Output = T::Native>
+            + Div<Output = T::Native>
+            + Zero
+            + Signed,
+    {
+        let mut b = PrimitiveBuilder::<T>::new(array.len());
+        for i in 0..array.len() {
+            let index = i;
+            if array.is_null(i) {
+                b.append_null()?
+            } else {
+                let value: T::Native = array.value(i);
+                b.append_value(abs(array.value(i)))?
+            }
+        }
+        Ok(b.finish())
+    }
     pub fn acos() {}
     pub fn add_months() {}
     // sort expression
