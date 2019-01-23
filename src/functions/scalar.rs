@@ -183,5 +183,15 @@ mod tests {
         assert_eq!(8.6, c.value(3));
         assert_eq!(0.0, c.value(4));
     }
-    Ok(b.finish())
+
+    #[test]
+    fn test_primitive_array_abs_i32() {
+        let a = Int32Array::from(vec![-5, -6, 7, -8, -0]);
+        let c: PrimitiveArray<Int32Type> = ScalarFunctions::abs(&a).unwrap();
+        assert_eq!(5, c.value(0));
+        assert_eq!(6, c.value(1));
+        assert_eq!(7, c.value(2));
+        assert_eq!(8, c.value(3));
+        assert_eq!(0, c.value(4));
+    }
 }
