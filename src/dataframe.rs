@@ -350,5 +350,13 @@ mod tests {
         let df3 = dataframe.drop(vec!["city", "ll_sum"]);
 
         assert_eq!(df2.schema().fields(), df3.schema().fields());
+
+        // calculate absolute value of `lng`
+        let abs: PrimitiveArray<Float64Type> = ScalarFunctions::abs(
+            dataframe.column_by_name("lng").as_ref()
+                .as_any().downcast_ref::<Float64Array>().unwrap()
+        ).unwrap();
+
+        assert_eq!(3.335724, abs.value(0));
     }
 }

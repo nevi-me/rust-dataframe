@@ -1,9 +1,9 @@
 use arrow::array::{Array, PrimitiveArray};
 use arrow::array_ops;
-use arrow::builder::{ArrayBuilder, PrimitiveArrayBuilder};
-use arrow::datatypes::{Float64Type, Int8Type};
+use arrow::builder::{ArrayBuilder, PrimitiveBuilder};
+use arrow::datatypes::*;
 use arrow::error::ArrowError;
-use num::Zero;
+use num::{abs, Signed, Zero};
 use std::{ops::Add, ops::Div, ops::Mul, ops::Sub};
 use arrow::datatypes::ArrowNumericType;
 use arrow::array::Float64Array;
@@ -70,28 +70,29 @@ impl ScalarFunctions {
         array_ops::multiply(left, right)
     }
 
-//    pub fn abs<T>(array: &PrimitiveArray<T>) -> Result<PrimitiveArray<T>, ArrowError>
-//        where
-//            T: ArrowNumericType,
-//            T::Native: Add<Output = T::Native>
-//            + Sub<Output = T::Native>
-//            + Mul<Output = T::Native>
-//            + Div<Output = T::Native>
-//            + Zero,
-//    {
-//        let mut b = PrimitiveArrayBuilder::<T>::new(array.len());
-//        for i in 0..array.len() {
-//            let index = i;
-//            if array.is_null(i) {
-//                b.push_null()?
-//            } else {
-//                let value: T::Native = array.value(i);
-//                value.cos();
-//                b.push(array.value(i).cos())?
-//            }
-//        }
-//        Ok(b.finish())
-//    }
+    /// Compute the absolute of a numeric array
+    pub fn abs<T>(array: &PrimitiveArray<T>) -> Result<PrimitiveArray<T>, ArrowError>
+        where
+           T: ArrowNumericType,
+           T::Native: Add<Output = T::Native>
+           + Sub<Output = T::Native>
+           + Mul<Output = T::Native>
+           + Div<Output = T::Native>
+           + Zero
+           + Signed,
+   {
+       let mut b = PrimitiveBuilder::<T>::new(array.len());
+       for i in 0..array.len() {
+           let index = i;
+           if array.is_null(i) {
+               b.append_null()?
+           } else {
+               let value: T::Native = array.value(i);
+               b.append_value(abs(array.value(i)))?
+           }
+       }
+       Ok(b.finish())
+   }
     pub fn acos() {}
     pub fn add_months() {}
     // sort expression
@@ -166,6 +167,21 @@ pub fn cos<T>(array: &PrimitiveArray<T>) -> Result<Float64Array, ArrowError>
             let aa = PrimitiveArray::<Float64Type>::from(array.value(i));
             b.push_null()?
         }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use arrow::array::{Float64Array, Int32Array};
+
+    #[test]
+    fn test_primitive_array_abs_f64() {
+        let a = Float64Array::from(vec![-5.2, -6.1, 7.3, -8.6, -0.0]);
+        let c: PrimitiveArray<Float64Type> = ScalarFunctions::abs(&a).unwrap();
+        assert_eq!(5.2, c.value(0));
+        assert_eq!(6.1, c.value(1));
+        assert_eq!(7.3, c.value(2));
+        assert_eq!(8.6, c.value(3));
+        assert_eq!(0.0, c.value(4));
     }
     Ok(b.finish())
 }
