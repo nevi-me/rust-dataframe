@@ -20,4 +20,12 @@ impl ArrayFunctions {
     // maybe aggregate
     fn collect_list() {}
     fn collect_set() {}
+
+    // maps and unions
+    fn map_concat() {}
+    fn map_from_arrays() {}
+    fn map_from_entries() {}
+    fn map_keys() {}
+    fn map_values() {}
+    
 }
