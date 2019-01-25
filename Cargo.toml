@@ -8,3 +8,4 @@ edition = "2018"
 #arrow = { git = "https://github.com/apache/arrow"}
 arrow = { path = "../../arrow/rust"}
 num = "0.2"
+num-traits = "0.2"
