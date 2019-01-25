@@ -9,6 +9,8 @@ use arrow::record_batch::RecordBatch;
 use std::fs::File;
 use std::sync::Arc;
 
+use crate::error::DataFrameError;
+
 fn make_array(data: ArrayDataRef) -> ArrayRef {
     // TODO: here data_type() needs to clone the type - maybe add a type tag enum to
     // avoid the cloning.
@@ -67,13 +69,13 @@ struct CsvDataSource {
     reader: CsvReader,
 }
 
-//impl Iterator for CsvDataSource {
-//    type Item = Result<RecordBatch, ArrowError>;
+// impl Iterator for CsvDataSource {
+//    type Item = Result<RecordBatch, DataFrameError>;
 //
 //    fn next(&mut self) -> Option<Self::Item> {
-//        Some(self.reader.next())
+//        Some(Ok(self.reader.next()))
 //    }
-//}
+// }
 
 impl DataFrame {
     /// Create an empty `DataFrame`
@@ -137,6 +139,7 @@ impl DataFrame {
     }
 
     /// Returns dataframe as an Arrow `RecordBatch`
+    /// TODO: add a method to break into smaller batches
     fn as_record_batch(&self) -> RecordBatch {
         RecordBatch::new(self.schema.clone(), self.columns.clone())
     }
@@ -172,7 +175,7 @@ impl DataFrame {
 
     /// Returns dataframe with specified columns selected.
     ///
-    /// If a column name does not exist, it is omitted
+    /// If a column name does not exist, it is omitted.
     pub fn select(&self, col_names: Vec<&str>) -> Self {
         // get the names of columns from the schema, and match them with supplied
         let mut col_num: i16 = -1;
@@ -212,6 +215,9 @@ impl DataFrame {
         }
     }
 
+    /// Returns a dataframe with specified columns dropped.
+    /// 
+    /// If a column name does not exist, it is omitted.
     pub fn drop(&self, col_names: Vec<&str>) -> Self {
         // get the names of columns from the schema, and match them with supplied
         let mut col_num: i16 = -1;
@@ -249,7 +255,10 @@ impl DataFrame {
         }
     }
 
-    pub fn from_table(table: arrow::table::Table) -> Self {
+    /// Create a dataframe from an Arrow Table.
+    /// 
+    /// Arrow Tables are not yet in the Rust library, and we are hashing them out here
+    pub fn from_table(table: crate::table::Table) -> Self {
         DataFrame {
             schema: table.schema().clone(),
             columns: table.columns(),
@@ -289,7 +298,7 @@ impl DataFrame {
         let schema: Arc<Schema> = batches[0].schema().clone();
 
         // convert to an arrow table
-        let table = arrow::table::Table::from_record_batches(schema, batches);
+        let table = crate::table::Table::from_record_batches(schema, batches);
 
         DataFrame::from_table(table)
     }

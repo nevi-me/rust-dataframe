@@ -5,3 +5,4 @@
 mod dataframe;
 mod error;
 mod functions;
+mod table;
