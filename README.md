@@ -18,6 +18,15 @@ It mainly focuses on computation, and aims to include:
 
 As a point of reference, we use [Apache Spark Python functions](http://spark.apache.org/docs/2.4.0/api/python/pyspark.sql.html#module-pyspark.sql.functions) for function parity, and aim to be compatible with Apache Spark functions.
 
+## Non-Goals
+
+Although we use Apache Spark as a reference, we do not intend on:
+
+- Creating deferred computation kernels (we'll leverage Arrow Rust)
+- Creating distributed computation kernels
+
+One can think of this library partly as a playground for features that could form part of Arrow.
+
 ## Status
 
 - DataFrame Operations
