@@ -28,7 +28,6 @@ impl AggregateFunctions {
         array_ops::sum(array)
     }
     pub fn first() {}
-    pub fn floor() {}
     pub fn kurtosis() {}
     pub fn last() {}
     pub fn skewness() {}

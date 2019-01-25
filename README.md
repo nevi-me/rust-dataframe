@@ -22,11 +22,32 @@ As a point of reference, we use [Apache Spark Python functions](http://spark.apa
 
 - DataFrame Operations
   - [x] Read CSV into dataframe
-  - [ ] Select single column, subset of columns, drop columns
-  - [ ] Add or remove columns
-  - [ ] Rename columns
+  - [X] Select single column, subset of columns, drop columns
+  - [X] Add or remove columns
+  - [X] Rename columns
   - [ ] Create dataframe from record batches (a `Vec<RecordBatch>` as well as an iterator)
   - [ ] Write dataframe to CSV (and other formats as and when Arrow supports them)
+
+- Scalar Functions
+  - [X] Trig functions (sin, cos, tan, asin, asinh, ...) (using the `num` crate where possible)
+  - [X] Basic arithmetic (add, mul, divide, subtract) **Implemented from Arrow**
+  - [ ] Date/Time functions
+  - [ ] String functions
+  - [ ] Crypto/hash functions (md5, crc32, sha{x}, ...)
+  - [ ] Other functions (that we haven't classified)
+
+- Aggregate Functions
+  - [ ] Sum
+  - [ ] Count
+  - [ ] Statistical aggregations (mean, mode, median, stddev, ...)
+
+- Window Functions
+  - [ ] Lead, lag
+  - [ ] Rank, percent rank
+  - [ ] Other
+
+- Array Functions
+  - [ ] Compatibility with Spark 2.4 functions
 
 ## Performance
 

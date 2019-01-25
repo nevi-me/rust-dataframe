@@ -329,7 +329,13 @@ impl ScalarFunctions {
     fn sort_array() {}
     fn soundex() {}
     fn split() {}
-    fn sqrt() {}
+    fn sqrt<T>(array: &PrimitiveArray<T>) -> Result<PrimitiveArray<T>, ArrowError>
+    where
+        T: ArrowNumericType,
+        T::Native: Add<Output = T::Native> + num_traits::Float,
+    {
+        scalar_op(array, |array| Ok(num::Float::sqrt(array)))
+    }
     fn r#struct() {}
     fn substring() {}
     fn substring_index() {}
