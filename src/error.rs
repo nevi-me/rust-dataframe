@@ -1,5 +1,5 @@
-use std::error::Error;
 use arrow::error::ArrowError;
+use std::error::Error;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum DataFrameError {
@@ -9,7 +9,7 @@ pub enum DataFrameError {
     DivideByZero,
     IoError(String),
     NoneError,
-    ArrowError
+    ArrowError,
 }
 
 impl From<ArrowError> for DataFrameError {

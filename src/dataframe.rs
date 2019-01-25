@@ -5,10 +5,9 @@ use arrow::array_data::ArrayDataRef;
 use arrow::csv::Reader as CsvReader;
 use arrow::csv::ReaderBuilder as CsvReaderBuilder;
 use arrow::datatypes::*;
-//use arrow::error::ArrowError;
 use arrow::record_batch::RecordBatch;
-use std::sync::Arc;
 use std::fs::File;
+use std::sync::Arc;
 
 fn make_array(data: ArrayDataRef) -> ArrayRef {
     // TODO: here data_type() needs to clone the type - maybe add a type tag enum to
@@ -253,7 +252,7 @@ impl DataFrame {
     pub fn from_table(table: arrow::table::Table) -> Self {
         DataFrame {
             schema: table.schema().clone(),
-            columns: table.columns()
+            columns: table.columns(),
         }
     }
 
@@ -262,7 +261,10 @@ impl DataFrame {
         let mut reader = match schema {
             Some(schema) => CsvReader::new(file, schema, true, 1024, None),
             None => {
-                let builder = CsvReaderBuilder::new().infer_schema(None).has_headers(true).with_batch_size(6);
+                let builder = CsvReaderBuilder::new()
+                    .infer_schema(None)
+                    .has_headers(true)
+                    .with_batch_size(6);
                 builder.build(file).unwrap()
             }
         };
@@ -270,14 +272,12 @@ impl DataFrame {
         let mut has_next = true;
         while has_next {
             match reader.next() {
-                Ok(batch) => {
-                    match batch {
-                        Some(batch) => {
-                            batches.push(batch);
-                        },
-                        None => {
-                            has_next = false;
-                        }
+                Ok(batch) => match batch {
+                    Some(batch) => {
+                        batches.push(batch);
+                    }
+                    None => {
+                        has_next = false;
                     }
                 },
                 Err(e) => {
@@ -296,9 +296,10 @@ impl DataFrame {
 }
 
 mod tests {
-    use arrow::array::Float64Array;
     use crate::dataframe::DataFrame;
     use crate::functions::scalar::ScalarFunctions;
+    use arrow::array::{Float64Array, PrimitiveArray};
+    use arrow::datatypes::Float64Type;
     use std::sync::Arc;
 
     #[test]
@@ -323,14 +324,22 @@ mod tests {
         let a = dataframe.column_by_name("lat").as_ref();
         let b = dataframe.column_by_name("lng").as_ref();
         let sum = ScalarFunctions::add(
-            a.as_any().downcast_ref::<Float64Array>().unwrap(), 
-            b.as_any().downcast_ref::<Float64Array>().unwrap()
+            a.as_any().downcast_ref::<Float64Array>().unwrap(),
+            b.as_any().downcast_ref::<Float64Array>().unwrap(),
         );
         dataframe = dataframe.with_column("lat_lng_sum", Arc::new(sum.unwrap()));
 
         assert_eq!(4, dataframe.num_columns());
         assert_eq!(4, dataframe.schema().fields().len());
-        assert_eq!(54.31776, dataframe.column_by_name("lat_lng_sum").as_any().downcast_ref::<Float64Array>().unwrap().value(0));
+        assert_eq!(
+            54.31776,
+            dataframe
+                .column_by_name("lat_lng_sum")
+                .as_any()
+                .downcast_ref::<Float64Array>()
+                .unwrap()
+                .value(0)
+        );
 
         dataframe = dataframe.with_column_renamed("lat_lng_sum", "ll_sum");
 
@@ -353,9 +362,14 @@ mod tests {
 
         // calculate absolute value of `lng`
         let abs: PrimitiveArray<Float64Type> = ScalarFunctions::abs(
-            dataframe.column_by_name("lng").as_ref()
-                .as_any().downcast_ref::<Float64Array>().unwrap()
-        ).unwrap();
+            dataframe
+                .column_by_name("lng")
+                .as_ref()
+                .as_any()
+                .downcast_ref::<Float64Array>()
+                .unwrap(),
+        )
+        .unwrap();
 
         assert_eq!(3.335724, abs.value(0));
     }

@@ -4,7 +4,7 @@ use arrow::builder::*;
 use arrow::datatypes::*;
 use arrow::error::ArrowError;
 use num::{abs, Signed, Zero};
-use num_traits::{Float};
+use num_traits::Float;
 use std::{ops::Add, ops::Div, ops::Mul, ops::Sub};
 
 
@@ -74,16 +74,14 @@ impl ScalarFunctions {
     pub fn abs<T>(array: &PrimitiveArray<T>) -> Result<PrimitiveArray<T>, ArrowError>
     where
         T: ArrowNumericType,
-        T::Native: Add<Output = T::Native>
-            + Signed,
+        T::Native: Add<Output = T::Native> + Signed,
     {
         scalar_op(array, |array| Ok(abs(array)))
     }
     pub fn acos<T>(array: &PrimitiveArray<T>) -> Result<PrimitiveArray<T>, ArrowError>
     where
         T: ArrowNumericType,
-        T::Native: Add<Output = T::Native>
-            + num_traits::Float,
+        T::Native: Add<Output = T::Native> + num_traits::Float,
     {
         let mut b = PrimitiveBuilder::<T>::new(array.len());
         for i in 0..array.len() {
@@ -103,24 +101,24 @@ impl ScalarFunctions {
     pub fn asin<T>(array: &PrimitiveArray<T>) -> Result<PrimitiveArray<T>, ArrowError>
     where
         T: ArrowNumericType,
-        T::Native: Add<Output = T::Native>
-            + num_traits::Float,
+        T::Native: Add<Output = T::Native> + num_traits::Float,
     {
         scalar_op(array, |array| Ok(num::Float::asin(array)))
     }
     pub fn atan<T>(array: &PrimitiveArray<T>) -> Result<PrimitiveArray<T>, ArrowError>
     where
         T: ArrowNumericType,
-        T::Native: Add<Output = T::Native>
-            + num_traits::Float,
+        T::Native: Add<Output = T::Native> + num_traits::Float,
     {
         scalar_op(array, |array| Ok(num::Float::atan(array)))
     }
-    pub fn atan2<T>(a: &PrimitiveArray<T>, b: &PrimitiveArray<T>) -> Result<PrimitiveArray<T>, ArrowError>
+    pub fn atan2<T>(
+        a: &PrimitiveArray<T>,
+        b: &PrimitiveArray<T>,
+    ) -> Result<PrimitiveArray<T>, ArrowError>
     where
         T: ArrowNumericType,
-        T::Native: Add<Output = T::Native>
-            + num_traits::Float,
+        T::Native: Add<Output = T::Native> + num_traits::Float,
     {
         math_op(a, b, |a, b| Ok(num::Float::atan2(a, b)))
     }
@@ -129,16 +127,14 @@ impl ScalarFunctions {
     pub fn cbrt<T>(array: &PrimitiveArray<T>) -> Result<PrimitiveArray<T>, ArrowError>
     where
         T: ArrowNumericType,
-        T::Native: Add<Output = T::Native>
-            + num_traits::Float,
+        T::Native: Add<Output = T::Native> + num_traits::Float,
     {
         scalar_op(array, |array| Ok(num::Float::cbrt(array)))
     }
     pub fn ceil<T>(array: &PrimitiveArray<T>) -> Result<PrimitiveArray<T>, ArrowError>
     where
         T: ArrowNumericType,
-        T::Native: Add<Output = T::Native>
-            + num_traits::Float,
+        T::Native: Add<Output = T::Native> + num_traits::Float,
     {
         scalar_op(array, |array| Ok(num::Float::ceil(array)))
     }
@@ -150,16 +146,14 @@ impl ScalarFunctions {
     pub fn cos<T>(array: &PrimitiveArray<T>) -> Result<PrimitiveArray<T>, ArrowError>
     where
         T: ArrowNumericType,
-        T::Native: Add<Output = T::Native>
-            + num_traits::Float,
+        T::Native: Add<Output = T::Native> + num_traits::Float,
     {
         scalar_op(array, |array| Ok(num::Float::cos(array)))
     }
     pub fn cosh<T>(array: &PrimitiveArray<T>) -> Result<PrimitiveArray<T>, ArrowError>
     where
         T: ArrowNumericType,
-        T::Native: Add<Output = T::Native>
-            + num_traits::Float,
+        T::Native: Add<Output = T::Native> + num_traits::Float,
     {
         scalar_op(array, |array| Ok(num::Float::cosh(array)))
     }
@@ -177,8 +171,7 @@ impl ScalarFunctions {
     pub fn degrees<T>(array: &PrimitiveArray<T>) -> Result<PrimitiveArray<T>, ArrowError>
     where
         T: ArrowNumericType,
-        T::Native: Add<Output = T::Native>
-            + num_traits::Float,
+        T::Native: Add<Output = T::Native> + num_traits::Float,
     {
         scalar_op(array, |array| Ok(num::Float::to_degrees(array)))
     }
@@ -187,8 +180,7 @@ impl ScalarFunctions {
     pub fn exp<T>(array: &PrimitiveArray<T>) -> Result<PrimitiveArray<T>, ArrowError>
     where
         T: ArrowNumericType,
-        T::Native: Add<Output = T::Native>
-            + num_traits::Float,
+        T::Native: Add<Output = T::Native> + num_traits::Float,
     {
         scalar_op(array, |array| Ok(num::Float::exp(array)))
     }
@@ -198,8 +190,7 @@ impl ScalarFunctions {
     pub fn expm1<T>(array: &PrimitiveArray<T>) -> Result<PrimitiveArray<T>, ArrowError>
     where
         T: ArrowNumericType,
-        T::Native: Add<Output = T::Native>
-            + num_traits::Float,
+        T::Native: Add<Output = T::Native> + num_traits::Float,
     {
         scalar_op(array, |array| Ok(num::Float::exp_m1(array)))
     }
@@ -207,8 +198,7 @@ impl ScalarFunctions {
     pub fn floor<T>(array: &PrimitiveArray<T>) -> Result<PrimitiveArray<T>, ArrowError>
     where
         T: ArrowNumericType,
-        T::Native: Add<Output = T::Native>
-            + num_traits::Float,
+        T::Native: Add<Output = T::Native> + num_traits::Float,
     {
         scalar_op(array, |array| Ok(num::Float::floor(array)))
     }
@@ -221,11 +211,13 @@ impl ScalarFunctions {
     pub fn hash() {}
     pub fn hex() {}
     pub fn hour() {}
-    pub fn hypot<T>(a: &PrimitiveArray<T>, b: &PrimitiveArray<T>) -> Result<PrimitiveArray<T>, ArrowError>
+    pub fn hypot<T>(
+        a: &PrimitiveArray<T>,
+        b: &PrimitiveArray<T>,
+    ) -> Result<PrimitiveArray<T>, ArrowError>
     where
         T: ArrowNumericType,
-        T::Native: Add<Output = T::Native>
-            + num_traits::Float,
+        T::Native: Add<Output = T::Native> + num_traits::Float,
     {
         math_op(a, b, |a, b| Ok(num::Float::hypot(a, b)))
     }
@@ -236,27 +228,27 @@ impl ScalarFunctions {
     pub fn levenshtein() {}
     pub fn lit() {}
     pub fn locate() {}
-    pub fn log<T>(a: &PrimitiveArray<T>, b: &PrimitiveArray<T>) -> Result<PrimitiveArray<T>, ArrowError>
+    pub fn log<T>(
+        a: &PrimitiveArray<T>,
+        b: &PrimitiveArray<T>,
+    ) -> Result<PrimitiveArray<T>, ArrowError>
     where
         T: ArrowNumericType,
-        T::Native: Add<Output = T::Native>
-            + num_traits::Float,
+        T::Native: Add<Output = T::Native> + num_traits::Float,
     {
         math_op(a, b, |a, b| Ok(num::Float::log(a, b)))
     }
     pub fn log10<T>(array: &PrimitiveArray<T>) -> Result<PrimitiveArray<T>, ArrowError>
     where
         T: ArrowNumericType,
-        T::Native: Add<Output = T::Native>
-            + num_traits::Float,
+        T::Native: Add<Output = T::Native> + num_traits::Float,
     {
         scalar_op(array, |array| Ok(num::Float::log10(array)))
     }
     pub fn log2<T>(array: &PrimitiveArray<T>) -> Result<PrimitiveArray<T>, ArrowError>
     where
         T: ArrowNumericType,
-        T::Native: Add<Output = T::Native>
-            + num_traits::Float,
+        T::Native: Add<Output = T::Native> + num_traits::Float,
     {
         scalar_op(array, |array| Ok(num::Float::log2(array)))
     }
@@ -284,8 +276,7 @@ impl ScalarFunctions {
     fn radians<T>(array: &PrimitiveArray<T>) -> Result<PrimitiveArray<T>, ArrowError>
     where
         T: ArrowNumericType,
-        T::Native: Add<Output = T::Native>
-            + num_traits::Float,
+        T::Native: Add<Output = T::Native> + num_traits::Float,
     {
         scalar_op(array, |array| Ok(num::Float::to_radians(array)))
     }
@@ -301,8 +292,7 @@ impl ScalarFunctions {
     fn round<T>(array: &PrimitiveArray<T>) -> Result<PrimitiveArray<T>, ArrowError>
     where
         T: ArrowNumericType,
-        T::Native: Add<Output = T::Native>
-            + num_traits::Float,
+        T::Native: Add<Output = T::Native> + num_traits::Float,
     {
         scalar_op(array, |array| Ok(num::Float::round(array)))
     }
@@ -322,16 +312,14 @@ impl ScalarFunctions {
     fn sin<T>(array: &PrimitiveArray<T>) -> Result<PrimitiveArray<T>, ArrowError>
     where
         T: ArrowNumericType,
-        T::Native: Add<Output = T::Native>
-            + num_traits::Float,
+        T::Native: Add<Output = T::Native> + num_traits::Float,
     {
         scalar_op(array, |array| Ok(num::Float::sin(array)))
     }
     fn sinh<T>(array: &PrimitiveArray<T>) -> Result<PrimitiveArray<T>, ArrowError>
     where
         T: ArrowNumericType,
-        T::Native: Add<Output = T::Native>
-            + num_traits::Float,
+        T::Native: Add<Output = T::Native> + num_traits::Float,
     {
         scalar_op(array, |array| Ok(num::Float::sinh(array)))
     }
@@ -348,16 +336,14 @@ impl ScalarFunctions {
     fn tan<T>(array: &PrimitiveArray<T>) -> Result<PrimitiveArray<T>, ArrowError>
     where
         T: ArrowNumericType,
-        T::Native: Add<Output = T::Native>
-            + num_traits::Float,
+        T::Native: Add<Output = T::Native> + num_traits::Float,
     {
         scalar_op(array, |array| Ok(num::Float::tan(array)))
     }
     fn tanh<T>(array: &PrimitiveArray<T>) -> Result<PrimitiveArray<T>, ArrowError>
     where
         T: ArrowNumericType,
-        T::Native: Add<Output = T::Native>
-            + num_traits::Float,
+        T::Native: Add<Output = T::Native> + num_traits::Float,
     {
         scalar_op(array, |array| Ok(num::Float::tanh(array)))
     }
@@ -407,10 +393,7 @@ where
     Ok(b.finish())
 }
 
-fn scalar_op<T, F>(
-    array: &PrimitiveArray<T>,
-    op: F,
-) -> Result<PrimitiveArray<T>, ArrowError>
+fn scalar_op<T, F>(array: &PrimitiveArray<T>, op: F) -> Result<PrimitiveArray<T>, ArrowError>
 where
     T: ArrowNumericType,
     F: Fn(T::Native) -> Result<T::Native, ArrowError>,
@@ -490,7 +473,8 @@ mod tests {
     #[test]
     fn test_primitive_array_acos_i32() {
         let a = Int32Array::from(vec![0, 1]);
-        let c: PrimitiveArray<Float64Type> = ScalarFunctions::acos(&natural_cast::<Int32Type, Float64Type>(&a).unwrap()).unwrap();
+        let c: PrimitiveArray<Float64Type> =
+            ScalarFunctions::acos(&natural_cast::<Int32Type, Float64Type>(&a).unwrap()).unwrap();
         assert_eq!(1.5707963267948966, c.value(0));
         assert_eq!(0.0, c.value(1));
     }
@@ -507,7 +491,8 @@ mod tests {
     #[test]
     fn test_primitive_array_cos_i32() {
         let a = Int32Array::from(vec![0, 1]);
-        let c: PrimitiveArray<Float64Type> = ScalarFunctions::cos(&natural_cast::<Int32Type, Float64Type>(&a).unwrap()).unwrap();
+        let c: PrimitiveArray<Float64Type> =
+            ScalarFunctions::cos(&natural_cast::<Int32Type, Float64Type>(&a).unwrap()).unwrap();
         assert_eq!(1.0, c.value(0));
         assert_eq!(0.5403023058681398, c.value(1));
     }
