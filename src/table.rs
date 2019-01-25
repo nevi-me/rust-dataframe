@@ -14,7 +14,7 @@ pub struct ChunkedArray {
 
 impl ChunkedArray {
     /// Construct a `ChunkedArray` from a list of `Array`s.
-    /// 
+    ///
     /// There must be at least 1 array, and all arrays must have the same data type.
     fn from_arrays(arrays: Vec<Arc<Array>>) -> Self {
         assert!(arrays.len() > 0);
@@ -57,12 +57,10 @@ impl ChunkedArray {
         &self.chunks
     }
 
-    
-
     // pub fn as_arrays<T>(&self) -> &PrimitiveArray<T>
-    // where 
+    // where
     //     T: ArrowPrimitiveType,
-    //     T::Native: ArrowPrimitiveType 
+    //     T::Native: ArrowPrimitiveType
     // {
     //     match T::get_data_type() {
     //         // DataType::Boolean => self.chunks[0].as_any().downcast_ref::<BooleanArray>().unwrap(),
@@ -81,15 +79,15 @@ impl ChunkedArray {
     //         // DataType::Struct(_) => self.chunks.iter().map(|array| array.as_any().downcast_ref::<BooleanArray>().unwrap()).collect(),
     //         dt => panic!("Unexpected data type {:?}", dt),
     //     }
-        
+
     // }
 
     /// Construct a zero-copy slice of the chunked array with the indicated offset and length.Arc
-    /// 
+    ///
     /// The `offset` is the position of the first element in the constructed slice.
     /// `length` is the length of the slice. If there are not enough elements in the chunked array,
     /// the length will be adjusted accordingly.
-    /// 
+    ///
     /// TODO: I've made length optional because CPP has 2 `slice` methods, with one being a slice
     /// to the end of the array.
     fn slice(&self, _offset: usize, length: Option<usize>) {
@@ -109,7 +107,7 @@ impl ChunkedArray {
 //     ($name:ident, $b:ty, $chunks:expr) => {
 //         impl Chunk for $name {
 //             fn test(chunks: $chunks) -> Vec<$b< {
-//                 // 
+//                 //
 //             }
 //         }
 //     }
@@ -124,10 +122,7 @@ pub struct Column {
 impl Column {
     fn from_chunked_array(chunk: ChunkedArray, field: arrow::datatypes::Field) -> Self {
         // assert!()
-        Column {
-            data: chunk,
-            field
-        }
+        Column { data: chunk, field }
     }
 
     pub fn from_arrays(arrays: Vec<Arc<Array>>, field: arrow::datatypes::Field) -> Self {
@@ -137,7 +132,7 @@ impl Column {
         }
         Column {
             data: ChunkedArray::from_arrays(arrays),
-            field
+            field,
         }
     }
 
@@ -233,21 +228,18 @@ impl Table {
         let fields: Vec<Field> = columns.iter().map(|column| column.field.clone()).collect();
         Table {
             schema: Arc::new(Schema::new(fields)),
-            columns
+            columns,
         }
     }
 
     /// Construct a `Table` from a sequence of `Column`s and a schema
     fn make_with_schema(schema: Arc<Schema>, columns: Vec<Column>) -> Self {
         // TODO validate that schema and columns match
-        Table {
-            schema,
-            columns
-        }
+        Table { schema, columns }
     }
 
     /// Construct a `Table` from a sequence of Arrow `RecordBatch`es.
-    /// 
+    ///
     /// Columns are first created from the `RecordBatch`es, with schema validations being performed.
     /// A table is then created
     pub fn from_record_batches(schema: Arc<Schema>, record_batches: Vec<RecordBatch>) -> Self {
@@ -256,26 +248,24 @@ impl Table {
         }
         let num_columns = record_batches[0].num_columns();
         // let mut arrays: Vec<Vec<&Arc<Array>>> = vec![vec![]; num_columns];
-        let mut arrays: Vec<Vec<&Arc<Array>>> = vec![vec![]; num_columns];
+        let mut arrays: Vec<Vec<Arc<Array>>> = vec![vec![]; num_columns];
         // create columns from record batches
         for ref batch in record_batches {
-            assert!(batch.num_columns() == num_columns, "Each record batch should have the same length as the first batch");
+            assert!(
+                batch.num_columns() == num_columns,
+                "Each record batch should have the same length as the first batch"
+            );
             for i in 0..num_columns {
-                arrays[i].push(&batch.column(i));
+                arrays[i].push(batch.column(i).to_owned());
             }
         }
-        // &record_batches.iter().for_each(|ref batch| {
-        //     assert!(batch.num_columns() == num_columns, "Each record batch should have the same length as the first batch");
-        //     for i in 0..num_columns {
-        //         arrays[i].push(*batch.column(i));
-        //     }
-        // });
-        let columns = arrays.iter().enumerate().map(|(i, array)| Column::from_arrays(array, schema.field(i).clone())).collect();
+        let columns = arrays
+            .iter()
+            .enumerate()
+            .map(|(i, array)| Column::from_arrays(array.to_owned(), schema.field(i).clone()))
+            .collect();
 
-        Table {
-            schema,
-            columns
-        }
+        Table { schema, columns }
     }
 
     // pub fn from_record_batches_copy(schema: Arc<Schema>, record_batches: Vec<RecordBatch>) -> Self {

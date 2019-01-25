@@ -92,7 +92,11 @@ impl DataFrame {
     }
 
     fn from_arrays(schema: Arc<Schema>, arrays: Vec<Arc<Array>>) -> Self {
-        let columns = arrays.into_iter().enumerate().map(|(i, array)| Column::from_arrays(vec![array], schema.field(i).clone())).collect();
+        let columns = arrays
+            .into_iter()
+            .enumerate()
+            .map(|(i, array)| Column::from_arrays(vec![array], schema.field(i).clone()))
+            .collect();
         DataFrame { schema, columns }
     }
 
@@ -156,7 +160,7 @@ impl DataFrame {
     }
 
     /// Returns dataframe with the first n records selected
-    /// 
+    ///
     /// TODO: this should work through batches, and slice the last one that makes
     /// the length match what we're taking.
     // fn take(&self, count: usize) -> Self {
@@ -229,7 +233,7 @@ impl DataFrame {
     // }
 
     /// Returns a dataframe with specified columns dropped.
-    /// 
+    ///
     /// If a column name does not exist, it is omitted.
     // pub fn drop(&self, col_names: Vec<&str>) -> Self {
     //     // get the names of columns from the schema, and match them with supplied
@@ -269,7 +273,7 @@ impl DataFrame {
     // }
 
     /// Create a dataframe from an Arrow Table.
-    /// 
+    ///
     /// Arrow Tables are not yet in the Rust library, and we are hashing them out here
     // pub fn from_table(table: crate::table::Table) -> Self {
     //     DataFrame {
@@ -316,7 +320,7 @@ impl DataFrame {
         // DataFrame::from_table(table)
         DataFrame {
             schema,
-            columns: table.columns
+            columns: table.columns,
         }
     }
 }
