@@ -14,9 +14,9 @@ pub struct ScalarFunctions;
 impl ScalarFunctions {
     /// Add two columns of `PrimitiveArray` type together
     pub fn add<T>(
-        left: &PrimitiveArray<T>,
-        right: &PrimitiveArray<T>,
-    ) -> Result<PrimitiveArray<T>, ArrowError>
+        left: Vec<&PrimitiveArray<T>>,
+        right: Vec<&PrimitiveArray<T>>,
+    ) -> Result<Vec<PrimitiveArray<T>>, ArrowError>
     where
         T: ArrowNumericType,
         T::Native: Add<Output = T::Native>
@@ -25,7 +25,10 @@ impl ScalarFunctions {
             + Div<Output = T::Native>
             + Zero,
     {
-        array_ops::add(left, right).into()
+        left.iter()
+            .zip(right.iter())
+            .map(|(a, b)| array_ops::add(a, b).into())
+            .collect()
     }
     /// Subtract two columns of `PrimitiveArray` type together
     pub fn subtract<T>(

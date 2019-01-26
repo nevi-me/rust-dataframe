@@ -100,6 +100,10 @@ impl DataFrame {
         DataFrame { schema, columns }
     }
 
+    pub fn from_columns(schema: Arc<Schema>, columns: Vec<Column>) -> Self {
+        DataFrame { schema, columns }
+    }
+
     pub fn schema(&self) -> &Arc<Schema> {
         &self.schema
     }
@@ -193,10 +197,10 @@ impl DataFrame {
     /// Returns dataframe with specified columns selected.
     ///
     /// If a column name does not exist, it is omitted.
-    // pub fn select(&self, col_names: Vec<&str>) -> Self {
+    // pub fn select(&mut self, col_names: Vec<&str>) -> Self {
     //     // get the names of columns from the schema, and match them with supplied
     //     let mut col_num: i16 = -1;
-    //     let schema = self.schema.clone();
+    //     let schema = &self.schema.clone();
     //     let field_names: Vec<(usize, &str)> = schema
     //         .fields()
     //         .iter()
@@ -217,19 +221,25 @@ impl DataFrame {
     //             .collect()
     //     };
 
-    //     // construct dataframe with selected columns
-    //     DataFrame {
-    //         schema: Arc::new(Schema::new(
-    //             filter_cols
-    //                 .iter()
-    //                 .map(|c| schema.field(c.0).clone())
-    //                 .collect(),
-    //         )),
-    //         columns: filter_cols
-    //             .iter()
-    //             .map(|c| self.columns[c.0])
-    //             .collect(),
+    //     // let columns = filter_cols.clone().iter().map(move |c| self.columns[c.0]).collect();
+
+    //     let mut columns = vec![];
+
+    //     for (i,u) in filter_cols.clone() {
+    //         let c = &self.columns[i];
+    //         columns.push(c);
     //     }
+
+    //     let new_schema = Arc::new(Schema::new(
+    //         filter_cols
+    //             .iter()
+    //             .map(|c| schema.field(c.0).clone())
+    //             .collect(),
+    //     ));
+
+    //     dbg!(filter_cols);
+
+    //     DataFrame::from_columns(new_schema, columns)
     // }
 
     /// Returns a dataframe with specified columns dropped.
@@ -328,8 +338,9 @@ impl DataFrame {
 mod tests {
     use crate::dataframe::DataFrame;
     use crate::functions::scalar::ScalarFunctions;
-    use arrow::array::{Float64Array, PrimitiveArray};
-    use arrow::datatypes::Float64Type;
+    use crate::table::*;
+    use arrow::array::{Array, ArrayRef, Float64Array, PrimitiveArray};
+    use arrow::datatypes::{DataType, Field, Float64Type};
     use std::sync::Arc;
 
     #[test]
@@ -348,59 +359,60 @@ mod tests {
         assert_eq!(37, dataframe.num_rows());
     }
 
-    // #[test]
-    // fn dataframe_ops() {
-    //     let mut dataframe = DataFrame::from_csv("./test/data/uk_cities_with_headers.csv", None);
-    //     let a = dataframe.column_by_name("lat");
-    //     let b = dataframe.column_by_name("lng");
-    //     let sum = ScalarFunctions::add(
-    //         a.data().downcast_ref::<Float64Array>().unwrap(),
-    //         b.data().downcast_ref::<Float64Array>().unwrap(),
-    //     );
-    //     dataframe = dataframe.with_column("lat_lng_sum", Arc::new(sum.unwrap()));
+    #[test]
+    fn dataframe_ops() {
+        let mut dataframe = DataFrame::from_csv("./test/data/uk_cities_with_headers.csv", None);
+        let a = dataframe.column_by_name("lat");
+        let b = dataframe.column_by_name("lng");
+        let sum = ScalarFunctions::add(column_to_arrays_f64(a), column_to_arrays_f64(b));
+        // TODO, make this better
+        let sum: Vec<ArrayRef> = sum
+            .unwrap()
+            .into_iter()
+            .map(|p| Arc::new(p) as ArrayRef)
+            .collect();
+        dataframe = dataframe.with_column(
+            "lat_lng_sum",
+            Column::from_arrays(sum, Field::new("lat_lng_sum", DataType::Float64, true)),
+        );
 
-    //     assert_eq!(4, dataframe.num_columns());
-    //     assert_eq!(4, dataframe.schema().fields().len());
-    //     assert_eq!(
-    //         54.31776,
-    //         dataframe
-    //             .column_by_name("lat_lng_sum")
-    //             .as_any()
-    //             .downcast_ref::<Float64Array>()
-    //             .unwrap()
-    //             .value(0)
-    //     );
+        assert_eq!(4, dataframe.num_columns());
+        assert_eq!(4, dataframe.schema().fields().len());
+        assert_eq!(
+            54.31776,
+            column_to_arrays_f64(dataframe.column_by_name("lat_lng_sum"))[0].value(0)
+        );
 
-    //     dataframe = dataframe.with_column_renamed("lat_lng_sum", "ll_sum");
+        dataframe = dataframe.with_column_renamed("lat_lng_sum", "ll_sum");
 
-    //     assert_eq!("ll_sum", dataframe.schema().field(3).name());
+        assert_eq!("ll_sum", dataframe.schema().field(3).name());
 
-    //     dataframe = dataframe.select(vec!["*"]);
+        // dataframe = dataframe.select(vec!["*"]);
 
-    //     assert_eq!(4, dataframe.num_columns());
-    //     assert_eq!(4, dataframe.schema().fields().len());
+        // assert_eq!(4, dataframe.num_columns());
+        // assert_eq!(4, dataframe.schema().fields().len());
 
-    //     let df2 = dataframe.select(vec!["lat", "lng"]);
+        // let df2 = dataframe.select(vec!["lat", "lng"]);
 
-    //     assert_eq!(2, df2.num_columns());
-    //     assert_eq!(2, df2.schema().fields().len());
+        // assert_eq!(2, df2.num_columns());
+        // assert_eq!(2, df2.schema().fields().len());
 
-    //     // drop columns from `dataframe`
-    //     let df3 = dataframe.drop(vec!["city", "ll_sum"]);
+        // // drop columns from `dataframe`
+        // let df3 = dataframe.drop(vec!["city", "ll_sum"]);
 
-    //     assert_eq!(df2.schema().fields(), df3.schema().fields());
+        // assert_eq!(df2.schema().fields(), df3.schema().fields());
 
-    //     // calculate absolute value of `lng`
-    //     let abs: PrimitiveArray<Float64Type> = ScalarFunctions::abs(
-    //         dataframe
-    //             .column_by_name("lng")
-    //             .as_ref()
-    //             .as_any()
-    //             .downcast_ref::<Float64Array>()
-    //             .unwrap(),
-    //     )
-    //     .unwrap();
+        // calculate absolute value of `lng`
+        // let abs: PrimitiveArray<Float64Type> = ScalarFunctions::abs(
+        //     dataframe
+        //         .column_by_name("lng")
+        //         .as_ref()
+        //         .as_any()
+        //         .downcast_ref::<Float64Array>()
+        //         .unwrap(),
+        // )
+        // .unwrap();
 
-    //     assert_eq!(3.335724, abs.value(0));
-    // }
+        // assert_eq!(3.335724, abs.value(0));
+    }
 }

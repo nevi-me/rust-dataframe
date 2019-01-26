@@ -31,7 +31,8 @@ One can think of this library partly as a playground for features that could for
 
 - DataFrame Operations
   - [x] Read CSV into dataframe
-  - [X] Select single column, subset of columns, drop columns
+  - [X] Select single column
+  - [ ] Select subset of columns, drop columns
   - [X] Add or remove columns
   - [X] Rename columns
   - [ ] Create dataframe from record batches (a `Vec<RecordBatch>` as well as an iterator)
