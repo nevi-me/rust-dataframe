@@ -797,8 +797,8 @@ mod tests {
     #[test]
     fn test_str_upper_and_lower() {
         let mut builder = BinaryBuilder::new(10);
-        builder.append_string("Hello");
-        builder.append_string("Arrow");
+        builder.append_string("Hello").unwrap();
+        builder.append_string("Arrow").unwrap();
         let array = builder.finish();
         let lower = ScalarFunctions::lower(&array).unwrap();
         assert_eq!("hello", lower.get_string(0));

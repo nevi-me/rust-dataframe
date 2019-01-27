@@ -42,13 +42,13 @@ One can think of this library partly as a playground for features that could for
   - [X] Trig functions (sin, cos, tan, asin, asinh, ...) (using the `num` crate where possible)
   - [X] Basic arithmetic (add, mul, divide, subtract) **Implemented from Arrow**
   - [ ] Date/Time functions
-  - [ ] String functions
+  - [ ] String functions (in progress, subset implemented)
   - [ ] Crypto/hash functions (md5, crc32, sha{x}, ...)
   - [ ] Other functions (that we haven't classified)
 
 - Aggregate Functions
-  - [ ] Sum
-  - [ ] Count
+  - [X] Sum, max, min
+  - [X] Count
   - [ ] Statistical aggregations (mean, mode, median, stddev, ...)
 
 - Window Functions
