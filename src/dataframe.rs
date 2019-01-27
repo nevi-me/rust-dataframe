@@ -1,3 +1,4 @@
+use crate::table::Column;
 use arrow::array;
 use arrow::array::{Array, ArrayRef};
 use arrow::array_data::ArrayDataBuilder;
@@ -62,7 +63,7 @@ fn make_array(data: ArrayDataRef) -> ArrayRef {
 
 pub struct DataFrame {
     schema: Arc<Schema>,
-    columns: Vec<ArrayRef>,
+    columns: Vec<Column>,
 }
 
 struct CsvDataSource {
@@ -71,8 +72,8 @@ struct CsvDataSource {
 
 // impl Iterator for CsvDataSource {
 //    type Item = Result<RecordBatch, DataFrameError>;
-//
-//    fn next(&mut self) -> Option<Self::Item> {
+
+//    fn next(&mut self) -> Result<Option<Self::Item>, arrow::error::ArrowError> {
 //        Some(Ok(self.reader.next()))
 //    }
 // }
@@ -86,7 +87,20 @@ impl DataFrame {
         }
     }
 
-    fn new(schema: Arc<Schema>, columns: Vec<Arc<Array>>) -> Self {
+    fn new(schema: Arc<Schema>, columns: Vec<Column>) -> Self {
+        DataFrame { schema, columns }
+    }
+
+    fn from_arrays(schema: Arc<Schema>, arrays: Vec<Arc<Array>>) -> Self {
+        let columns = arrays
+            .into_iter()
+            .enumerate()
+            .map(|(i, array)| Column::from_arrays(vec![array], schema.field(i).clone()))
+            .collect();
+        DataFrame { schema, columns }
+    }
+
+    pub fn from_columns(schema: Arc<Schema>, columns: Vec<Column>) -> Self {
         DataFrame { schema, columns }
     }
 
@@ -99,15 +113,15 @@ impl DataFrame {
     }
 
     pub fn num_rows(&self) -> usize {
-        self.columns[0].data().len()
+        self.columns[0].data.num_rows()
     }
 
     /// Get a column from schema by index.
-    pub fn column(&self, i: usize) -> &ArrayRef {
+    pub fn column(&self, i: usize) -> &Column {
         &self.columns[i]
     }
 
-    pub fn column_by_name(&self, name: &str) -> &ArrayRef {
+    pub fn column_by_name(&self, name: &str) -> &Column {
         let column_number = self.schema.column_with_name(name).unwrap();
         let column = &self.columns[column_number.0];
         let field = self.schema.field(column_number.0);
@@ -115,12 +129,12 @@ impl DataFrame {
     }
 
     /// Returns a new `DataFrame` with column appended.
-    pub fn with_column(mut self, name: &str, column: ArrayRef) -> Self {
+    pub fn with_column(mut self, name: &str, column: Column) -> Self {
         let mut fields = self.schema.fields().clone();
         fields.push(Field::new(
             name,
             column.data_type().clone(),
-            column.null_count() > 0,
+            column.field().is_nullable(),
         ));
         self.schema = Arc::new(Schema::new(fields));
         self.columns.push(column);
@@ -130,7 +144,7 @@ impl DataFrame {
     /// Returns the `DataFrame` with the specified column renamed
     pub fn with_column_renamed(mut self, old_name: &str, new_name: &str) -> Self {
         // this should only modify the schema
-        let (index, mut field) = self.schema.column_with_name(old_name).unwrap();
+        let (index, field) = self.schema.column_with_name(old_name).unwrap();
         let new_field = Field::new(new_name, field.data_type().clone(), field.is_nullable());
         let mut fields = self.schema.fields().clone();
         fields[index] = new_field;
@@ -140,34 +154,41 @@ impl DataFrame {
 
     /// Returns dataframe as an Arrow `RecordBatch`
     /// TODO: add a method to break into smaller batches
-    fn as_record_batch(&self) -> RecordBatch {
-        RecordBatch::new(self.schema.clone(), self.columns.clone())
+    fn to_record_batches(&self) -> Vec<RecordBatch> {
+        let batches: Vec<RecordBatch> = Vec::with_capacity(self.column(0).data().num_chunks());
+        for i in 0..self.num_columns() {
+            unimplemented!("We currently do not get batches, this should live in dataframe")
+        }
+        batches
+        // RecordBatch::new(self.schema.clone(), self.columns)
     }
 
     /// Returns dataframe with the first n records selected
-    fn take(&self, count: usize) -> Self {
-        DataFrame::new(
-            self.schema.clone(),
-            self.columns
-                .clone()
-                .into_iter()
-                .map(|col| {
-                    ArrayDataBuilder::new(col.data_type().clone())
-                        .child_data(
-                            col.data()
-                                .child_data()
-                                .iter()
-                                .take(count)
-                                .into_iter()
-                                .map(|x| x.clone())
-                                .collect(),
-                        )
-                        .build()
-                })
-                .map(|col| make_array(col))
-                .collect(),
-        )
-    }
+    ///
+    /// TODO: this should work through batches, and slice the last one that makes
+    /// the length match what we're taking.
+    // fn take(&self, count: usize) -> Self {
+    //     DataFrame::new(
+    //         self.schema.clone(),
+    //         self.columns
+    //             .into_iter()
+    //             .map(|col| {
+    //                 ArrayDataBuilder::new(col.data_type().clone())
+    //                     .child_data(
+    //                         col.data()
+    //                             .child_data()
+    //                             .iter()
+    //                             .take(count)
+    //                             .into_iter()
+    //                             .map(|x| x.clone())
+    //                             .collect(),
+    //                     )
+    //                     .build()
+    //             })
+    //             .map(|col| make_array(col))
+    //             .collect(),
+    //     )
+    // }
 
     fn intersect(&self, other: &DataFrame) -> Self {
         unimplemented!("Intersect not yet implemented")
@@ -176,94 +197,100 @@ impl DataFrame {
     /// Returns dataframe with specified columns selected.
     ///
     /// If a column name does not exist, it is omitted.
-    pub fn select(&self, col_names: Vec<&str>) -> Self {
-        // get the names of columns from the schema, and match them with supplied
-        let mut col_num: i16 = -1;
-        let schema = self.schema.clone();
-        let field_names: Vec<(usize, &str)> = schema
-            .fields()
-            .into_iter()
-            .map(|c| {
-                col_num += 1;
-                (col_num as usize, c.name().as_str())
-            })
-            .collect();
+    // pub fn select(&mut self, col_names: Vec<&str>) -> Self {
+    //     // get the names of columns from the schema, and match them with supplied
+    //     let mut col_num: i16 = -1;
+    //     let schema = &self.schema.clone();
+    //     let field_names: Vec<(usize, &str)> = schema
+    //         .fields()
+    //         .iter()
+    //         .map(|c| {
+    //             col_num += 1;
+    //             (col_num as usize, c.name().as_str())
+    //         })
+    //         .collect();
 
-        // filter names
-        let filter_cols: Vec<(usize, &str)> = if col_names.contains(&"*") {
-            field_names
-        } else {
-            // TODO follow the order of user-supplied column names
-            field_names
-                .into_iter()
-                .filter(|(col, name)| col_names.contains(name))
-                .collect()
-        };
+    //     // filter names
+    //     let filter_cols: Vec<(usize, &str)> = if col_names.contains(&"*") {
+    //         field_names
+    //     } else {
+    //         // TODO follow the order of user-supplied column names
+    //         field_names
+    //             .into_iter()
+    //             .filter(|(col, name)| col_names.contains(name))
+    //             .collect()
+    //     };
 
-        // construct dataframe with selected columns
-        DataFrame {
-            schema: Arc::new(Schema::new(
-                filter_cols
-                    .iter()
-                    .map(|c| schema.field(c.0).clone())
-                    .collect(),
-            )),
-            columns: filter_cols
-                .into_iter()
-                .map(move |c| self.columns[c.0].clone())
-                .collect(),
-        }
-    }
+    //     // let columns = filter_cols.clone().iter().map(move |c| self.columns[c.0]).collect();
+
+    //     let mut columns = vec![];
+
+    //     for (i,u) in filter_cols.clone() {
+    //         let c = &self.columns[i];
+    //         columns.push(c);
+    //     }
+
+    //     let new_schema = Arc::new(Schema::new(
+    //         filter_cols
+    //             .iter()
+    //             .map(|c| schema.field(c.0).clone())
+    //             .collect(),
+    //     ));
+
+    //     dbg!(filter_cols);
+
+    //     DataFrame::from_columns(new_schema, columns)
+    // }
 
     /// Returns a dataframe with specified columns dropped.
-    /// 
+    ///
     /// If a column name does not exist, it is omitted.
-    pub fn drop(&self, col_names: Vec<&str>) -> Self {
-        // get the names of columns from the schema, and match them with supplied
-        let mut col_num: i16 = -1;
-        let schema = self.schema.clone();
-        let field_names: Vec<(usize, &str)> = schema
-            .fields()
-            .into_iter()
-            .map(|c| {
-                col_num += 1;
-                (col_num as usize, c.name().as_str())
-            })
-            .collect();
+    // pub fn drop(&self, col_names: Vec<&str>) -> Self {
+    //     // get the names of columns from the schema, and match them with supplied
+    //     let mut col_num: i16 = -1;
+    //     let schema = self.schema.clone();
+    //     let field_names: Vec<(usize, &str)> = schema
+    //         .fields()
+    //         .into_iter()
+    //         .map(|c| {
+    //             col_num += 1;
+    //             (col_num as usize, c.name().as_str())
+    //         })
+    //         .collect();
 
-        // filter names
-        let filter_cols: Vec<(usize, &str)> = {
-            // TODO follow the order of user-supplied column names
-            field_names
-                .into_iter()
-                .filter(|(col, name)| !col_names.contains(name))
-                .collect()
-        };
+    //     // filter names
+    //     let filter_cols: Vec<(usize, &str)> = {
+    //         // TODO follow the order of user-supplied column names
+    //         field_names
+    //             .into_iter()
+    //             .filter(|(col, name)| !col_names.contains(name))
+    //             .collect()
+    //     };
 
-        // construct dataframe with selected columns
-        DataFrame {
-            schema: Arc::new(Schema::new(
-                filter_cols
-                    .iter()
-                    .map(|c| schema.field(c.0).clone())
-                    .collect(),
-            )),
-            columns: filter_cols
-                .into_iter()
-                .map(move |c| self.columns[c.0].clone())
-                .collect(),
-        }
-    }
+    //     // construct dataframe with selected columns
+    //     DataFrame {
+    //         schema: Arc::new(Schema::new(
+    //             filter_cols
+    //                 .iter()
+    //                 .map(|c| schema.field(c.0).clone())
+    //                 .collect(),
+    //         )),
+    //         columns: filter_cols
+    //             .into_iter()
+    //             .map(move |c| self.columns[c.0])
+    //             .collect(),
+    //     }
+    // }
 
     /// Create a dataframe from an Arrow Table.
-    /// 
+    ///
     /// Arrow Tables are not yet in the Rust library, and we are hashing them out here
-    pub fn from_table(table: crate::table::Table) -> Self {
-        DataFrame {
-            schema: table.schema().clone(),
-            columns: table.columns(),
-        }
-    }
+    // pub fn from_table(table: crate::table::Table) -> Self {
+    //     DataFrame {
+    //         schema: table.schema().clone(),
+    //         columns: *table.columns(),
+    //     }
+    // }
 
     pub fn from_csv(path: &str, schema: Option<Arc<Schema>>) -> Self {
         let file = File::open(path).unwrap();
@@ -298,17 +325,22 @@ impl DataFrame {
         let schema: Arc<Schema> = batches[0].schema().clone();
 
         // convert to an arrow table
-        let table = crate::table::Table::from_record_batches(schema, batches);
+        let table = crate::table::Table::from_record_batches(schema.clone(), batches);
 
-        DataFrame::from_table(table)
+        // DataFrame::from_table(table)
+        DataFrame {
+            schema,
+            columns: table.columns,
+        }
     }
 }
 
 mod tests {
     use crate::dataframe::DataFrame;
     use crate::functions::scalar::ScalarFunctions;
-    use arrow::array::{Float64Array, PrimitiveArray};
-    use arrow::datatypes::Float64Type;
+    use crate::table::*;
+    use arrow::array::{Array, ArrayRef, Float64Array, PrimitiveArray};
+    use arrow::datatypes::{DataType, Field, Float64Type};
     use std::sync::Arc;
 
     #[test]
@@ -330,56 +362,50 @@ mod tests {
     #[test]
     fn dataframe_ops() {
         let mut dataframe = DataFrame::from_csv("./test/data/uk_cities_with_headers.csv", None);
-        let a = dataframe.column_by_name("lat").as_ref();
-        let b = dataframe.column_by_name("lng").as_ref();
-        let sum = ScalarFunctions::add(
-            a.as_any().downcast_ref::<Float64Array>().unwrap(),
-            b.as_any().downcast_ref::<Float64Array>().unwrap(),
+        let a = dataframe.column_by_name("lat");
+        let b = dataframe.column_by_name("lng");
+        let sum = ScalarFunctions::add(column_to_arrays_f64(a), column_to_arrays_f64(b));
+        // TODO, make this better
+        let sum: Vec<ArrayRef> = sum
+            .unwrap()
+            .into_iter()
+            .map(|p| Arc::new(p) as ArrayRef)
+            .collect();
+        dataframe = dataframe.with_column(
+            "lat_lng_sum",
+            Column::from_arrays(sum, Field::new("lat_lng_sum", DataType::Float64, true)),
         );
-        dataframe = dataframe.with_column("lat_lng_sum", Arc::new(sum.unwrap()));
 
         assert_eq!(4, dataframe.num_columns());
         assert_eq!(4, dataframe.schema().fields().len());
         assert_eq!(
             54.31776,
-            dataframe
-                .column_by_name("lat_lng_sum")
-                .as_any()
-                .downcast_ref::<Float64Array>()
-                .unwrap()
-                .value(0)
+            column_to_arrays_f64(dataframe.column_by_name("lat_lng_sum"))[0].value(0)
         );
 
         dataframe = dataframe.with_column_renamed("lat_lng_sum", "ll_sum");
 
         assert_eq!("ll_sum", dataframe.schema().field(3).name());
 
-        dataframe = dataframe.select(vec!["*"]);
+        // dataframe = dataframe.select(vec!["*"]);
 
-        assert_eq!(4, dataframe.num_columns());
-        assert_eq!(4, dataframe.schema().fields().len());
+        // assert_eq!(4, dataframe.num_columns());
+        // assert_eq!(4, dataframe.schema().fields().len());
 
-        let df2 = dataframe.select(vec!["lat", "lng"]);
+        // let df2 = dataframe.select(vec!["lat", "lng"]);
 
-        assert_eq!(2, df2.num_columns());
-        assert_eq!(2, df2.schema().fields().len());
+        // assert_eq!(2, df2.num_columns());
+        // assert_eq!(2, df2.schema().fields().len());
 
-        // drop columns from `dataframe`
-        let df3 = dataframe.drop(vec!["city", "ll_sum"]);
+        // // drop columns from `dataframe`
+        // let df3 = dataframe.drop(vec!["city", "ll_sum"]);
 
-        assert_eq!(df2.schema().fields(), df3.schema().fields());
+        // assert_eq!(df2.schema().fields(), df3.schema().fields());
 
         // calculate absolute value of `lng`
-        let abs: PrimitiveArray<Float64Type> = ScalarFunctions::abs(
-            dataframe
-                .column_by_name("lng")
-                .as_ref()
-                .as_any()
-                .downcast_ref::<Float64Array>()
-                .unwrap(),
-        )
-        .unwrap();
+        let abs: Vec<PrimitiveArray<Float64Type>> =
+            ScalarFunctions::abs(column_to_arrays_f64(dataframe.column_by_name("lng"))).unwrap();
 
-        assert_eq!(3.335724, abs.value(0));
+        assert_eq!(3.335724, abs[0].value(0));
     }
 }

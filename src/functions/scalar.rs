@@ -7,15 +7,16 @@ use num::{abs, Signed, Zero};
 use num_traits::Float;
 use std::{ops::Add, ops::Div, ops::Mul, ops::Sub};
 
+// use crate::error::{DataFrameError};
 
 pub struct ScalarFunctions;
 
 impl ScalarFunctions {
     /// Add two columns of `PrimitiveArray` type together
     pub fn add<T>(
-        left: &PrimitiveArray<T>,
-        right: &PrimitiveArray<T>,
-    ) -> Result<PrimitiveArray<T>, ArrowError>
+        left: Vec<&PrimitiveArray<T>>,
+        right: Vec<&PrimitiveArray<T>>,
+    ) -> Result<Vec<PrimitiveArray<T>>, ArrowError>
     where
         T: ArrowNumericType,
         T::Native: Add<Output = T::Native>
@@ -24,7 +25,10 @@ impl ScalarFunctions {
             + Div<Output = T::Native>
             + Zero,
     {
-        array_ops::add(left, right).into()
+        left.iter()
+            .zip(right.iter())
+            .map(|(a, b)| array_ops::add(a, b).into())
+            .collect()
     }
     /// Subtract two columns of `PrimitiveArray` type together
     pub fn subtract<T>(
@@ -416,6 +420,135 @@ where
     Ok(b.finish())
 }
 
+//pub fn cast<T, R>(array: &PrimitiveArray<T>) -> Result<PrimitiveArray<R>, ArrowError>
+//    where
+//        T: ArrowPrimitiveType,
+//        R: ArrowPrimitiveType,
+//        <R as arrow::datatypes::ArrowPrimitiveType>::Native: std::convert::From<<T as arrow::datatypes::ArrowPrimitiveType>::Native>
+////        <R as arrow::datatypes::ArrowPrimitiveType>::Native: std::convert::From<<T as arrow::datatypes::ArrowPrimitiveType>::Native>,
+//{
+//    let mut b = PrimitiveBuilder::<R>::new(array.len());
+//
+//    let built = match (R::get_data_type(), T::get_data_type()) {
+//        (_, DataType::Float64) => {
+//            natural_cast(array)
+//        }
+//        (_, _) => {
+//            unimplemented!()
+//        }
+//    };
+//
+//    built
+//}
+
+fn natural_cast<T, R>(array: &PrimitiveArray<T>) -> Result<PrimitiveArray<R>, ArrowError>
+where
+    T: ArrowNumericType,
+    R: ArrowNumericType,
+    <R as arrow::datatypes::ArrowPrimitiveType>::Native:
+        std::convert::From<<T as arrow::datatypes::ArrowPrimitiveType>::Native>,
+{
+    let mut b = PrimitiveBuilder::<R>::new(array.len());
+
+    for i in 0..array.len() {
+        if array.is_null(i) {
+            b.append_null()?;
+        } else {
+            let v = array.value(i);
+            b.append_value(v.into())?;
+        }
+    }
+
+    Ok(b.finish())
+}
+
+// pub fn cast(array: &Array, to_type: &str) -> Result<Array> {
+//     // use different conversion functions depending on data types
+//     use crate::datatypes::DataType::*;
+//     match array.data_type() {
+//         Int32 => panic!("Unsupported cast type"),
+//         _ => panic!("Unsupported cast type")
+//     }
+// }
+
+/// Casts the array from `ArrowNumericType<T>` to `ArrowNumericType<R>`.
+///
+/// If a value is null, the result is a null.
+fn cast_numeric<T, R>(array: &PrimitiveArray<T>) -> Result<PrimitiveArray<R>, ArrowError>
+where
+    T: ArrowNumericType,
+    R: ArrowNumericType,
+    T::Native: num::NumCast,
+    R::Native: num::NumCast,
+{
+    let mut b = PrimitiveBuilder::<R>::new(array.len());
+    for i in 0..array.len() {
+        if array.is_null(i) {
+            b.append_null()?;
+        } else {
+            // some casts return None, such as a negative value to u{8|16|32|64}
+            match num::cast::cast(array.value(i)) {
+                Some(v) => b.append_value(v)?,
+                None => b.append_null()?,
+            };
+        }
+    }
+
+    Ok(b.finish())
+}
+
+fn cast_to_string<T>(array: &PrimitiveArray<T>) -> Result<BinaryArray, ArrowError>
+where
+    T: ArrowNumericType,
+    T::Native: ::std::string::ToString,
+{
+    let mut b = BinaryBuilder::new(array.len());
+    for i in 0..array.len() {
+        if array.is_null(i) {
+            b.append(false)?;
+        } else {
+            b.append_string(array.value(i).to_string().as_str())?
+        }
+    }
+
+    Ok(b.finish())
+}
+
+fn cast_string_to_numeric<T>(array: &BinaryArray) -> crate::error::Result<PrimitiveArray<T>>
+where
+    T: ArrowNumericType,
+    T::Native: ::std::string::ToString,
+    <T::Native as std::str::FromStr>::Err: std::fmt::Debug,
+{
+    let mut b = PrimitiveBuilder::<T>::new(array.len());
+    for i in 0..array.len() {
+        if array.is_null(i) {
+            b.append_null()?;
+        } else {
+            let string: &str = ::std::str::from_utf8(array.value(i))?;
+            let value: T::Native = string.parse().unwrap();
+            b.append_value(value)?
+        }
+    }
+
+    Ok(b.finish())
+}
+
+fn cast_string_to_boolean(array: &BinaryArray) -> crate::error::Result<BooleanArray> {
+    let mut b = BooleanBuilder::new(array.len());
+    for i in 0..array.len() {
+        if array.is_null(i) {
+            b.append_null()?;
+        } else {
+            let string: &str = ::std::str::from_utf8(array.value(i))?;
+            let value: bool = string.to_lowercase().parse().unwrap();
+            b.append_value(value)?
+        }
+    }
+
+    Ok(b.finish())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -503,4 +636,48 @@ mod tests {
         assert_eq!(0.5403023058681398, c.value(1));
     }
 
+    #[test]
+    fn test_i32_array_cast_f64() {
+        let a = Int32Array::from(vec![None, Some(200), None, Some(-256)]);
+        let b = cast_numeric::<Int32Type, Float64Type>(&a).unwrap();
+        assert_eq!(true, b.is_null(0));
+        assert_eq!(200f64, b.value(1));
+        assert_eq!(true, b.is_null(2));
+        assert_eq!(-256f64, b.value(3));
+    }
+
+    #[test]
+    fn test_f32_array_cast_i64() {
+        let a = Float32Array::from(vec![None, Some(200.0), None, Some(-256.0)]);
+        let b: Int64Array = cast_numeric(&a).unwrap();
+        assert_eq!(true, b.is_null(0));
+        assert_eq!(200i64, b.value(1));
+        assert_eq!(true, b.is_null(2));
+        assert_eq!(-256i64, b.value(3));
+    }
+
+    #[test]
+    fn test_f32_array_cast_uxx() {
+        let a = Float32Array::from(vec![None, Some(200.0), None, Some(256.0)]);
+        let b = cast_numeric::<Float32Type, Int32Type>(&a).unwrap();
+        // dbg!(b);
+        dbg!(b.value(0));
+        dbg!(b.value(1));
+        dbg!(b.value(2));
+        dbg!(b.value(3));
+        assert_eq!(true, b.is_null(0));
+        assert_eq!(200i32, b.value(1));
+        assert_eq!(true, b.is_null(2));
+        assert_eq!(256i32, b.value(3));
+    }
+
+    #[test]
+    fn test_i64_array_cast_u64() {
+        let a = Int64Array::from(vec![None, Some(200), None, Some(256)]);
+        let b = cast_numeric::<Int64Type, UInt64Type>(&a).unwrap();
+        assert_eq!(true, b.is_null(0));
+        assert_eq!(200u64, b.value(1));
+        assert_eq!(true, b.is_null(2));
+        assert_eq!(256u64, b.value(3));
+    }
 }
