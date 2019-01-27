@@ -57,31 +57,6 @@ impl ChunkedArray {
         &self.chunks
     }
 
-    // pub fn as_arrays<T>(&self) -> &PrimitiveArray<T>
-    // where
-    //     T: ArrowPrimitiveType,
-    //     T::Native: ArrowPrimitiveType
-    // {
-    //     match T::get_data_type() {
-    //         // DataType::Boolean => self.chunks[0].as_any().downcast_ref::<BooleanArray>().unwrap(),
-    //         DataType::Int8 => self.chunks[0].as_any().downcast_ref::<Int8Array>().unwrap(),
-    //         // DataType::Int16 => self.chunks.iter().map(|array| array.as_any().downcast_ref::<BooleanArray>().unwrap()).collect(),
-    //         // DataType::Int32 => self.chunks.iter().map(|array| array.as_any().downcast_ref::<BooleanArray>().unwrap()).collect(),
-    //         // DataType::Int64 => self.chunks.iter().map(|array| array.as_any().downcast_ref::<BooleanArray>().unwrap()).collect(),
-    //         // DataType::UInt8 => self.chunks.iter().map(|array| array.as_any().downcast_ref::<BooleanArray>().unwrap()).collect(),
-    //         // DataType::UInt16 => self.chunks.iter().map(|array| array.as_any().downcast_ref::<BooleanArray>().unwrap()).collect(),
-    //         // DataType::UInt32 => self.chunks.iter().map(|array| array.as_any().downcast_ref::<BooleanArray>().unwrap()).collect(),
-    //         // DataType::UInt64 => self.chunks.iter().map(|array| array.as_any().downcast_ref::<BooleanArray>().unwrap()).collect(),
-    //         // DataType::Float32 => self.chunks.iter().map(|array| array.as_any().downcast_ref::<BooleanArray>().unwrap()).collect(),
-    //         // DataType::Float64 => self.chunks.iter().map(|array| array.as_any().downcast_ref::<BooleanArray>().unwrap()).collect(),
-    //         // DataType::Utf8 => self.chunks.iter().map(|array| array.as_any().downcast_ref::<BooleanArray>().unwrap()).collect(),
-    //         // DataType::List(_) => self.chunks.iter().map(|array| array.as_any().downcast_ref::<BooleanArray>().unwrap()).collect(),
-    //         // DataType::Struct(_) => self.chunks.iter().map(|array| array.as_any().downcast_ref::<BooleanArray>().unwrap()).collect(),
-    //         dt => panic!("Unexpected data type {:?}", dt),
-    //     }
-
-    // }
-
     /// Construct a zero-copy slice of the chunked array with the indicated offset and length.Arc
     ///
     /// The `offset` is the position of the first element in the constructed slice.
@@ -90,18 +65,31 @@ impl ChunkedArray {
     ///
     /// TODO: I've made length optional because CPP has 2 `slice` methods, with one being a slice
     /// to the end of the array.
-    fn slice(&self, _offset: usize, length: Option<usize>) {
-        unimplemented!("TODO: I need help here, this has to be a zero-copy slice among slices")
+    /// 
+    /// TODO: This relies on my version of slice, which I'm still implementing.
+    fn slice(&self, offset: usize, length: Option<usize>) -> Self {
+        // unimplemented!("TODO: I need help here, this has to be a zero-copy slice among slices")
+        let mut offset = offset;
+        let mut length = length.unwrap_or(std::usize::MAX);
+        let mut current_chunk: usize = 0;
+        let mut new_chunks: Vec<ArrayRef> = vec![];
+        while current_chunk < self.num_chunks() && offset >= self.chunk(current_chunk).len() {
+            offset -= self.chunk(current_chunk).len();
+            current_chunk += 1;
+        }
+        while current_chunk < self.num_chunks() && length > 0 {
+            new_chunks.push(self.chunk(current_chunk).slice(offset, length));
+            length -= self.chunk(current_chunk).len() - offset;
+            offset = 0;
+            current_chunk += 1;
+        }
+        Self::from_arrays(new_chunks)
     }
 
     fn flatten(&self) {
         unimplemented!("This is for flattening struct columns, we aren't yet there")
     }
 }
-
-// pub trait Chunk {
-//     fn test();
-// }
 
 macro_rules! column_to_arrays {
     ($func_name:ident, $b:ty) => {
@@ -145,7 +133,6 @@ pub struct Column {
 
 impl Column {
     pub fn from_chunked_array(chunk: ChunkedArray, field: arrow::datatypes::Field) -> Self {
-        // assert!()
         Column { data: chunk, field }
     }
 
@@ -177,7 +164,7 @@ impl Column {
     }
 
     /// TODO: slice seems the same as that of `ChunkedArray`
-    fn slice() {}
+    // fn slice(&self, offset: usize, length: usize) -> Self {}
 
     fn flatten() {}
 }
@@ -471,19 +458,6 @@ unsafe impl Sync for Table {}
 
 #[cfg(test)]
 mod tests {
-    // use super::*;
-    // use crate::array::{Float64Array, Int32Array};
 
-    #[test]
-    fn test_supported() {
-        println!("SSE: {}", is_x86_feature_detected!("sse"));
-        println!("SSE2: {}", is_x86_feature_detected!("sse2"));
-        println!("SSE3: {}", is_x86_feature_detected!("sse3"));
-        println!("SSSE3: {}", is_x86_feature_detected!("ssse3"));
-        println!("SSE4.1: {}", is_x86_feature_detected!("sse4.1"));
-        println!("SSE4.2: {}", is_x86_feature_detected!("sse4.2"));
-        println!("AVX: {}", is_x86_feature_detected!("avx"));
-        println!("AVX2: {}", is_x86_feature_detected!("avx2"));
-        println!("AVX512f: {}", is_x86_feature_detected!("avx512f"));
-    }
+
 }

@@ -403,16 +403,9 @@ mod tests {
         // assert_eq!(df2.schema().fields(), df3.schema().fields());
 
         // calculate absolute value of `lng`
-        // let abs: PrimitiveArray<Float64Type> = ScalarFunctions::abs(
-        //     dataframe
-        //         .column_by_name("lng")
-        //         .as_ref()
-        //         .as_any()
-        //         .downcast_ref::<Float64Array>()
-        //         .unwrap(),
-        // )
-        // .unwrap();
+        let abs: Vec<PrimitiveArray<Float64Type>> =
+            ScalarFunctions::abs(column_to_arrays_f64(dataframe.column_by_name("lng"))).unwrap();
 
-        // assert_eq!(3.335724, abs.value(0));
+        assert_eq!(3.335724, abs[0].value(0));
     }
 }
