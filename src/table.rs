@@ -65,26 +65,26 @@ impl ChunkedArray {
     ///
     /// TODO: I've made length optional because CPP has 2 `slice` methods, with one being a slice
     /// to the end of the array.
-    /// 
+    ///
     /// TODO: This relies on my version of slice, which I'm still implementing.
-    fn slice(&self, offset: usize, length: Option<usize>) -> Self {
-        // unimplemented!("TODO: I need help here, this has to be a zero-copy slice among slices")
-        let mut offset = offset;
-        let mut length = length.unwrap_or(std::usize::MAX);
-        let mut current_chunk: usize = 0;
-        let mut new_chunks: Vec<ArrayRef> = vec![];
-        while current_chunk < self.num_chunks() && offset >= self.chunk(current_chunk).len() {
-            offset -= self.chunk(current_chunk).len();
-            current_chunk += 1;
-        }
-        while current_chunk < self.num_chunks() && length > 0 {
-            new_chunks.push(self.chunk(current_chunk).slice(offset, length));
-            length -= self.chunk(current_chunk).len() - offset;
-            offset = 0;
-            current_chunk += 1;
-        }
-        Self::from_arrays(new_chunks)
-    }
+    // fn slice(&self, offset: usize, length: Option<usize>) -> Self {
+    //     // unimplemented!("TODO: I need help here, this has to be a zero-copy slice among slices")
+    //     let mut offset = offset;
+    //     let mut length = length.unwrap_or(std::usize::MAX);
+    //     let mut current_chunk: usize = 0;
+    //     let mut new_chunks: Vec<ArrayRef> = vec![];
+    //     while current_chunk < self.num_chunks() && offset >= self.chunk(current_chunk).len() {
+    //         offset -= self.chunk(current_chunk).len();
+    //         current_chunk += 1;
+    //     }
+    //     while current_chunk < self.num_chunks() && length > 0 {
+    //         new_chunks.push(self.chunk(current_chunk).slice(offset, length));
+    //         length -= self.chunk(current_chunk).len() - offset;
+    //         offset = 0;
+    //         current_chunk += 1;
+    //     }
+    //     Self::from_arrays(new_chunks)
+    // }
 
     fn flatten(&self) {
         unimplemented!("This is for flattening struct columns, we aren't yet there")
@@ -457,7 +457,4 @@ unsafe impl Send for Table {}
 unsafe impl Sync for Table {}
 
 #[cfg(test)]
-mod tests {
-
-
-}
+mod tests {}
