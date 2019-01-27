@@ -7,6 +7,8 @@ use num::{abs, Signed, Zero};
 use num_traits::Float;
 use std::{ops::Add, ops::Div, ops::Mul, ops::Sub};
 
+extern crate test;
+
 // use crate::error::{DataFrameError};
 
 pub struct ScalarFunctions;
@@ -32,9 +34,9 @@ impl ScalarFunctions {
     }
     /// Subtract two columns of `PrimitiveArray` type together
     pub fn subtract<T>(
-        left: &PrimitiveArray<T>,
-        right: &PrimitiveArray<T>,
-    ) -> Result<PrimitiveArray<T>, ArrowError>
+        left: Vec<&PrimitiveArray<T>>,
+        right: Vec<&PrimitiveArray<T>>,
+    ) -> Result<Vec<PrimitiveArray<T>>, ArrowError>
     where
         T: ArrowNumericType,
         T::Native: Add<Output = T::Native>
@@ -43,12 +45,15 @@ impl ScalarFunctions {
             + Div<Output = T::Native>
             + Zero,
     {
-        array_ops::subtract(left, right)
+        left.iter()
+            .zip(right.iter())
+            .map(|(a, b)| array_ops::subtract(a, b).into())
+            .collect()
     }
     pub fn divide<T>(
-        left: &PrimitiveArray<T>,
-        right: &PrimitiveArray<T>,
-    ) -> Result<PrimitiveArray<T>, ArrowError>
+        left: Vec<&PrimitiveArray<T>>,
+        right: Vec<&PrimitiveArray<T>>,
+    ) -> Result<Vec<PrimitiveArray<T>>, ArrowError>
     where
         T: ArrowNumericType,
         T::Native: Add<Output = T::Native>
@@ -57,12 +62,15 @@ impl ScalarFunctions {
             + Div<Output = T::Native>
             + Zero,
     {
-        array_ops::divide(left, right)
+        left.iter()
+            .zip(right.iter())
+            .map(|(a, b)| array_ops::divide(a, b).into())
+            .collect()
     }
     pub fn multiply<T>(
-        left: &PrimitiveArray<T>,
-        right: &PrimitiveArray<T>,
-    ) -> Result<PrimitiveArray<T>, ArrowError>
+        left: Vec<&PrimitiveArray<T>>,
+        right: Vec<&PrimitiveArray<T>>,
+    ) -> Result<Vec<PrimitiveArray<T>>, ArrowError>
     where
         T: ArrowNumericType,
         T::Native: Add<Output = T::Native>
@@ -71,50 +79,54 @@ impl ScalarFunctions {
             + Div<Output = T::Native>
             + Zero,
     {
-        array_ops::multiply(left, right)
+        left.iter()
+            .zip(right.iter())
+            .map(|(a, b)| array_ops::multiply(a, b).into())
+            .collect()
     }
 
     /// Compute the absolute of a numeric array
-    pub fn abs<T>(array: &PrimitiveArray<T>) -> Result<PrimitiveArray<T>, ArrowError>
+    pub fn abs<T>(array: Vec<&PrimitiveArray<T>>) -> Result<Vec<PrimitiveArray<T>>, ArrowError>
     where
         T: ArrowNumericType,
-        T::Native: Add<Output = T::Native> + Signed,
+        T::Native: Signed,
     {
-        scalar_op(array, |array| Ok(abs(array)))
+        array.iter().map(|a| scalar_op(a, |a| Ok(abs(a)))).collect()
     }
-    pub fn acos<T>(array: &PrimitiveArray<T>) -> Result<PrimitiveArray<T>, ArrowError>
+
+    /// Compute the arccos of a decimal type array
+    pub fn acos<T>(array: Vec<&PrimitiveArray<T>>) -> Result<Vec<PrimitiveArray<T>>, ArrowError>
     where
         T: ArrowNumericType,
-        T::Native: Add<Output = T::Native> + num_traits::Float,
+        T::Native: num_traits::Float,
     {
-        let mut b = PrimitiveBuilder::<T>::new(array.len());
-        for i in 0..array.len() {
-            let index = i;
-            if array.is_null(i) {
-                b.append_null()?
-            } else {
-                let value: T::Native = array.value(i);
-                b.append_value(num::Float::acos(array.value(i)))?
-            }
-        }
-        Ok(b.finish())
+        array
+            .iter()
+            .map(|a| scalar_op(a, |a| Ok(num::Float::acos(a))))
+            .collect()
     }
     pub fn add_months() {}
     // sort expression
     pub fn asc() {}
-    pub fn asin<T>(array: &PrimitiveArray<T>) -> Result<PrimitiveArray<T>, ArrowError>
+    pub fn asin<T>(array: Vec<&PrimitiveArray<T>>) -> Result<Vec<PrimitiveArray<T>>, ArrowError>
     where
         T: ArrowNumericType,
-        T::Native: Add<Output = T::Native> + num_traits::Float,
+        T::Native: num_traits::Float,
     {
-        scalar_op(array, |array| Ok(num::Float::asin(array)))
+        array
+            .iter()
+            .map(|a| scalar_op(a, |a| Ok(num::Float::asin(a))))
+            .collect()
     }
-    pub fn atan<T>(array: &PrimitiveArray<T>) -> Result<PrimitiveArray<T>, ArrowError>
+    pub fn atan<T>(array: Vec<&PrimitiveArray<T>>) -> Result<Vec<PrimitiveArray<T>>, ArrowError>
     where
         T: ArrowNumericType,
-        T::Native: Add<Output = T::Native> + num_traits::Float,
+        T::Native: num_traits::Float,
     {
-        scalar_op(array, |array| Ok(num::Float::atan(array)))
+        array
+            .iter()
+            .map(|a| scalar_op(a, |a| Ok(num::Float::atan(a))))
+            .collect()
     }
     pub fn atan2<T>(
         a: &PrimitiveArray<T>,
@@ -128,38 +140,50 @@ impl ScalarFunctions {
     }
     pub fn base64() {}
     pub fn bitwise_not() {}
-    pub fn cbrt<T>(array: &PrimitiveArray<T>) -> Result<PrimitiveArray<T>, ArrowError>
+    pub fn cbrt<T>(array: Vec<&PrimitiveArray<T>>) -> Result<Vec<PrimitiveArray<T>>, ArrowError>
     where
         T: ArrowNumericType,
-        T::Native: Add<Output = T::Native> + num_traits::Float,
+        T::Native: num_traits::Float,
     {
-        scalar_op(array, |array| Ok(num::Float::cbrt(array)))
+        array
+            .iter()
+            .map(|a| scalar_op(a, |a| Ok(num::Float::cbrt(a))))
+            .collect()
     }
-    pub fn ceil<T>(array: &PrimitiveArray<T>) -> Result<PrimitiveArray<T>, ArrowError>
+    pub fn ceil<T>(array: Vec<&PrimitiveArray<T>>) -> Result<Vec<PrimitiveArray<T>>, ArrowError>
     where
         T: ArrowNumericType,
-        T::Native: Add<Output = T::Native> + num_traits::Float,
+        T::Native: num_traits::Float,
     {
-        scalar_op(array, |array| Ok(num::Float::ceil(array)))
+        array
+            .iter()
+            .map(|a| scalar_op(a, |a| Ok(num::Float::ceil(a))))
+            .collect()
     }
     pub fn coalesce() {}
     pub fn concat() {}
     pub fn concat_ws() {}
     pub fn conv() {}
     pub fn corr() {}
-    pub fn cos<T>(array: &PrimitiveArray<T>) -> Result<PrimitiveArray<T>, ArrowError>
+    pub fn cos<T>(array: Vec<&PrimitiveArray<T>>) -> Result<Vec<PrimitiveArray<T>>, ArrowError>
     where
         T: ArrowNumericType,
-        T::Native: Add<Output = T::Native> + num_traits::Float,
+        T::Native: num_traits::Float,
     {
-        scalar_op(array, |array| Ok(num::Float::cos(array)))
+        array
+            .iter()
+            .map(|a| scalar_op(a, |a| Ok(num::Float::cos(a))))
+            .collect()
     }
-    pub fn cosh<T>(array: &PrimitiveArray<T>) -> Result<PrimitiveArray<T>, ArrowError>
+    pub fn cosh<T>(array: Vec<&PrimitiveArray<T>>) -> Result<Vec<PrimitiveArray<T>>, ArrowError>
     where
         T: ArrowNumericType,
-        T::Native: Add<Output = T::Native> + num_traits::Float,
+        T::Native: num_traits::Float,
     {
-        scalar_op(array, |array| Ok(num::Float::cosh(array)))
+        array
+            .iter()
+            .map(|a| scalar_op(a, |a| Ok(num::Float::cosh(a))))
+            .collect()
     }
     pub fn crc32() {}
     pub fn current_date() {}
@@ -172,12 +196,15 @@ impl ScalarFunctions {
     pub fn day_of_month() {}
     pub fn day_of_week() {}
     pub fn day_of_year() {}
-    pub fn degrees<T>(array: &PrimitiveArray<T>) -> Result<PrimitiveArray<T>, ArrowError>
+    pub fn degrees<T>(array: Vec<&PrimitiveArray<T>>) -> Result<Vec<PrimitiveArray<T>>, ArrowError>
     where
         T: ArrowNumericType,
-        T::Native: Add<Output = T::Native> + num_traits::Float,
+        T::Native: num_traits::Float,
     {
-        scalar_op(array, |array| Ok(num::Float::to_degrees(array)))
+        array
+            .iter()
+            .map(|a| scalar_op(a, |a| Ok(num::Float::to_degrees(a))))
+            .collect()
     }
     // sort expression
     pub fn desc() {}
@@ -191,20 +218,26 @@ impl ScalarFunctions {
 
     // TODO might make sense as a DataFrame function
     pub fn explode() {}
-    pub fn expm1<T>(array: &PrimitiveArray<T>) -> Result<PrimitiveArray<T>, ArrowError>
+    pub fn expm1<T>(array: Vec<&PrimitiveArray<T>>) -> Result<Vec<PrimitiveArray<T>>, ArrowError>
     where
         T: ArrowNumericType,
-        T::Native: Add<Output = T::Native> + num_traits::Float,
+        T::Native: num_traits::Float,
     {
-        scalar_op(array, |array| Ok(num::Float::exp_m1(array)))
+        array
+            .iter()
+            .map(|a| scalar_op(a, |a| Ok(num::Float::exp_m1(a))))
+            .collect()
     }
     pub fn factorial() {}
-    pub fn floor<T>(array: &PrimitiveArray<T>) -> Result<PrimitiveArray<T>, ArrowError>
+    pub fn floor<T>(array: Vec<&PrimitiveArray<T>>) -> Result<Vec<PrimitiveArray<T>>, ArrowError>
     where
         T: ArrowNumericType,
-        T::Native: Add<Output = T::Native> + num_traits::Float,
+        T::Native: num_traits::Float,
     {
-        scalar_op(array, |array| Ok(num::Float::floor(array)))
+        array
+            .iter()
+            .map(|a| scalar_op(a, |a| Ok(num::Float::floor(a))))
+            .collect()
     }
     pub fn format_number() {}
     pub fn format_string() {}
@@ -256,9 +289,27 @@ impl ScalarFunctions {
     {
         scalar_op(array, |array| Ok(num::Float::log2(array)))
     }
-    pub fn lower() {}
+    pub fn lower(array: &BinaryArray) -> Result<BinaryArray, ArrowError> {
+        let mut b = BinaryBuilder::new(array.len());
+        for i in 0..array.len() {
+            if array.is_null(i) {
+                b.append(false)?
+            } else {
+                match &::std::str::from_utf8(array.value(i)) {
+                    Ok(string) => b.append_string(&string.to_lowercase())?,
+                    _ => b.append(false)?,
+                }
+            }
+        }
+        Ok(b.finish())
+    }
     pub fn lpad() {}
-    pub fn ltrim() {}
+    pub fn ltrim(array: Vec<&BinaryArray>) -> Result<Vec<BinaryArray>, ArrowError> {
+        array
+            .iter()
+            .map(|a| string_op(a, |a| Ok(str::trim_start(a))))
+            .collect()
+    }
     pub fn md5() {}
     pub fn minute() {}
     fn monotonically_increasing_id() {}
@@ -301,7 +352,12 @@ impl ScalarFunctions {
         scalar_op(array, |array| Ok(num::Float::round(array)))
     }
     fn rpad() {}
-    fn rtrim() {}
+    pub fn rtrim(array: Vec<&BinaryArray>) -> Result<Vec<BinaryArray>, ArrowError> {
+        array
+            .iter()
+            .map(|a| string_op(a, |a| Ok(str::trim_end(a))))
+            .collect()
+    }
     // fn schema_of_json() {}
     fn second() {}
     fn sequence() {}
@@ -341,7 +397,24 @@ impl ScalarFunctions {
         scalar_op(array, |array| Ok(num::Float::sqrt(array)))
     }
     fn r#struct() {}
-    fn substring() {}
+    fn substring(array: &BinaryArray, pos: usize, len: usize) -> Result<BinaryArray, ArrowError> {
+        let mut b = BinaryBuilder::new(array.len());
+        for i in 0..array.len() {
+            let index = i;
+            if array.is_null(i) {
+                b.append(false)?;
+            } else {
+                match &::std::str::from_utf8(array.value(i)) {
+                    Ok(string) => {
+                        let s: String = string.chars().skip(pos).take(len).collect();
+                        b.append_string(&s)?
+                    }
+                    _ => b.append(false)?,
+                }
+            }
+        }
+        Ok(b.finish())
+    }
     fn substring_index() {}
     fn tan<T>(array: &PrimitiveArray<T>) -> Result<PrimitiveArray<T>, ArrowError>
     where
@@ -362,12 +435,30 @@ impl ScalarFunctions {
     fn to_timestamp() {}
     fn to_utc_timestamp() {}
     fn translate() {}
-    fn trim() {}
+    pub fn trim(array: Vec<&BinaryArray>) -> Result<Vec<BinaryArray>, ArrowError> {
+        array
+            .iter()
+            .map(|a| string_op(a, |a| Ok(str::trim(a))))
+            .collect()
+    }
     fn trunc() {}
     fn unbase64() {}
     fn unhex() {}
     fn unix_timestamp() {}
-    fn upper() {}
+    pub fn upper(array: &BinaryArray) -> Result<BinaryArray, ArrowError> {
+        let mut b = BinaryBuilder::new(array.len());
+        for i in 0..array.len() {
+            if array.is_null(i) {
+                b.append(false)?
+            } else {
+                match &::std::str::from_utf8(array.value(i)) {
+                    Ok(string) => b.append_string(&string.to_uppercase())?,
+                    _ => b.append(false)?,
+                }
+            }
+        }
+        Ok(b.finish())
+    }
     fn week_of_year() {}
     // this will be interesting to implement
     fn when() {}
@@ -415,6 +506,25 @@ where
             b.append_null()?;
         } else {
             b.append_value(op(array.value(index))?)?;
+        }
+    }
+    Ok(b.finish())
+}
+
+fn string_op<F>(array: &BinaryArray, op: F) -> Result<BinaryArray, ArrowError>
+where
+    F: Fn(&str) -> Result<&str, ArrowError>,
+{
+    let mut b = BinaryBuilder::new(array.len());
+    for i in 0..array.len() {
+        let index = i;
+        if array.is_null(i) {
+            b.append(false)?;
+        } else {
+            match &::std::str::from_utf8(array.value(i)) {
+                Ok(string) => b.append_string(op(string)?)?,
+                _ => b.append(false)?,
+            }
         }
     }
     Ok(b.finish())
@@ -552,6 +662,7 @@ fn cast_string_to_boolean(array: &BinaryArray) -> crate::error::Result<BooleanAr
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::functions::scalar::test::Bencher;
     use arrow::array::*;
 
     #[test]
@@ -581,7 +692,7 @@ mod tests {
     #[test]
     fn test_primitive_array_abs_f64() {
         let a = Float64Array::from(vec![-5.2, -6.1, 7.3, -8.6, -0.0]);
-        let c: PrimitiveArray<Float64Type> = ScalarFunctions::abs(&a).unwrap();
+        let c: &PrimitiveArray<Float64Type> = &ScalarFunctions::abs(vec![&a]).unwrap()[0];
         assert_eq!(5.2, c.value(0));
         assert_eq!(6.1, c.value(1));
         assert_eq!(7.3, c.value(2));
@@ -592,7 +703,7 @@ mod tests {
     #[test]
     fn test_primitive_array_abs_i32() {
         let a = Int32Array::from(vec![-5, -6, 7, -8, -0]);
-        let c: PrimitiveArray<Int32Type> = ScalarFunctions::abs(&a).unwrap();
+        let c: &PrimitiveArray<Int32Type> = &ScalarFunctions::abs(vec![&a]).unwrap()[0];
         assert_eq!(5, c.value(0));
         assert_eq!(6, c.value(1));
         assert_eq!(7, c.value(2));
@@ -603,7 +714,7 @@ mod tests {
     #[test]
     fn test_primitive_array_acos_f64() {
         let a = Float64Array::from(vec![-0.2, 0.25, 0.75]);
-        let c: PrimitiveArray<Float64Type> = ScalarFunctions::acos(&a).unwrap();
+        let c: &PrimitiveArray<Float64Type> = &ScalarFunctions::acos(vec![&a]).unwrap()[0];
         assert_eq!(1.7721542475852274, c.value(0));
         assert_eq!(1.318116071652818, c.value(1));
         assert_eq!(0.7227342478134157, c.value(2));
@@ -612,8 +723,9 @@ mod tests {
     #[test]
     fn test_primitive_array_acos_i32() {
         let a = Int32Array::from(vec![0, 1]);
-        let c: PrimitiveArray<Float64Type> =
-            ScalarFunctions::acos(&natural_cast::<Int32Type, Float64Type>(&a).unwrap()).unwrap();
+        let c: &PrimitiveArray<Float64Type> =
+            &ScalarFunctions::acos(vec![&natural_cast::<Int32Type, Float64Type>(&a).unwrap()])
+                .unwrap()[0];
         assert_eq!(1.5707963267948966, c.value(0));
         assert_eq!(0.0, c.value(1));
     }
@@ -621,7 +733,7 @@ mod tests {
     #[test]
     fn test_primitive_array_cos_f64() {
         let a = Float64Array::from(vec![-0.2, 0.25, 0.75]);
-        let c: PrimitiveArray<Float64Type> = ScalarFunctions::cos(&a).unwrap();
+        let c: &PrimitiveArray<Float64Type> = &ScalarFunctions::cos(vec![&a]).unwrap()[0];
         assert_eq!(0.9800665778412416, c.value(0));
         assert_eq!(0.9689124217106447, c.value(1));
         assert_eq!(0.7316888688738209, c.value(2));
@@ -630,8 +742,9 @@ mod tests {
     #[test]
     fn test_primitive_array_cos_i32() {
         let a = Int32Array::from(vec![0, 1]);
-        let c: PrimitiveArray<Float64Type> =
-            ScalarFunctions::cos(&natural_cast::<Int32Type, Float64Type>(&a).unwrap()).unwrap();
+        let c: &PrimitiveArray<Float64Type> =
+            &ScalarFunctions::cos(vec![&natural_cast::<Int32Type, Float64Type>(&a).unwrap()])
+                .unwrap()[0];
         assert_eq!(1.0, c.value(0));
         assert_eq!(0.5403023058681398, c.value(1));
     }
@@ -679,5 +792,31 @@ mod tests {
         assert_eq!(200u64, b.value(1));
         assert_eq!(true, b.is_null(2));
         assert_eq!(256u64, b.value(3));
+    }
+
+    #[test]
+    fn test_str_upper_and_lower() {
+        let mut builder = BinaryBuilder::new(10);
+        builder.append_string("Hello");
+        builder.append_string("Arrow");
+        let array = builder.finish();
+        let lower = ScalarFunctions::lower(&array).unwrap();
+        assert_eq!("hello", lower.get_string(0));
+        assert_eq!("arrow", lower.get_string(1));
+        let upper = ScalarFunctions::upper(&array).unwrap();
+        assert_eq!("HELLO", upper.get_string(0));
+        assert_eq!("ARROW", upper.get_string(1));
+    }
+
+    #[bench]
+    fn bench_cos_f64(b: &mut Bencher) {
+        let a = Int32Array::from(vec![None, Some(200), None, Some(-256), None]);
+        b.iter(|| cast_numeric::<Int32Type, Float64Type>(&a).unwrap());
+    }
+
+    #[bench]
+    fn bench_sin_f64(b: &mut Bencher) {
+        let a = Int32Array::from(vec![None, Some(200), None, Some(-256), None]);
+        b.iter(|| ScalarFunctions::multiply::<Int32Type>(vec![&a], vec![&a]).unwrap());
     }
 }
