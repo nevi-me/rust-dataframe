@@ -37,12 +37,18 @@ One can think of this library partly as a playground for features that could for
   - [X] Rename columns
   - [ ] Create dataframe from record batches (a `Vec<RecordBatch>` as well as an iterator)
   - [ ] Write dataframe to CSV (and other formats as and when Arrow supports them)
+  - [ ] Sort dataframes
+  - [ ] Grouped operations
+  - [ ] Filter dataframes
 
 - Scalar Functions
   - [X] Trig functions (sin, cos, tan, asin, asinh, ...) (using the `num` crate where possible)
   - [X] Basic arithmetic (add, mul, divide, subtract) **Implemented from Arrow**
   - [ ] Date/Time functions
-  - [ ] String functions (in progress, subset implemented)
+  - [ ] String functions
+    - [ ] Basic string manipulation
+    - [ ] Regular expressions (leveraging `regex`)
+    - [ ] Casting to and from strings
   - [ ] Crypto/hash functions (md5, crc32, sha{x}, ...)
   - [ ] Other functions (that we haven't classified)
 
