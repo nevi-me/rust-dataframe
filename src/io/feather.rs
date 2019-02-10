@@ -18,7 +18,7 @@
 //! Example:
 //!
 //! ```
-//! use arrow::ipc::feather::*;
+//! use rust_dataframe::io::feather::*;
 //! use std::fs::File;
 //!
 //! // read a feather file

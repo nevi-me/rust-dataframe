@@ -6,7 +6,10 @@ edition = "2018"
 
 [dependencies]
 arrow = { git = "https://github.com/apache/arrow"}
+# arrow = { git = "https://github.com/nevi-me/arrow", rev="a52fa39dbd8e35278604e8ad16cb069bf30b0c9a"}
+# arrow = { path = "../../arrow/rust/arrow"}
 num = "0.2"
 num-traits = "0.2"
+csv = "1"
 byteorder = "1"
 flatbuffers = "0.5"
