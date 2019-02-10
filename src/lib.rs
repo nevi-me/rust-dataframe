@@ -4,8 +4,9 @@
 #![allow(dead_code)]
 #![feature(test)]
 
-mod dataframe;
-mod error;
-mod functions;
-mod io;
-mod table;
+pub mod dataframe;
+pub mod error;
+pub mod functions;
+pub mod io;
+pub mod table;
+pub mod utils;
