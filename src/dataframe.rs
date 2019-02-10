@@ -333,6 +333,44 @@ impl DataFrame {
             columns: table.columns,
         }
     }
+
+    pub fn from_feather(path: &str) -> Result<Self, ArrowError> {
+        use crate::io::feather::*;
+
+        let mut reader = FeatherReader::new(File::open(path)?);
+        let batch = reader.read()?;
+
+        let schema = batch.schema().clone();
+
+        let table = crate::table::Table::from_record_batches(schema.clone(), vec![batch]);
+
+        Ok(DataFrame {
+            schema,
+            columns: table.columns,
+        })
+    }
+
+    /// Write dataframe to a feather file
+    ///
+    /// Data is currently written as individual batches (as Arrow doesn't yet support slicing).
+    /// This will be rectified when the above condition is met.
+    pub fn to_feather(&self, path: &str) -> Result<(), ArrowError> {
+        use crate::io::feather::*;
+
+        let record_batches = self.to_record_batches();
+
+        record_batches.iter().enumerate().for_each(|(i, batch)| {
+            let mut file_name = String::new();
+            file_name.push_str(path);
+            file_name.push_str("_");
+            file_name.push_str(&i.to_string());
+            file_name.push_str(".feather");
+            batch.write_feather(&file_name).unwrap();
+        });
+
+        Ok(())
+    }
+
 }
 
 mod tests {
@@ -407,5 +445,38 @@ mod tests {
             ScalarFunctions::abs(column_to_arrays_f64(dataframe.column_by_name("lng"))).unwrap();
 
         assert_eq!(3.335724, abs[0].value(0));
+    }
+
+    #[test]
+    fn feather_io() {
+        let mut dataframe = DataFrame::from_csv("./test/data/uk_cities_with_headers.csv", None);
+        let a = dataframe.column_by_name("lat");
+        let b = dataframe.column_by_name("lng");
+        let sum = ScalarFunctions::add(column_to_arrays_f64(a), column_to_arrays_f64(b));
+        // TODO, make this better
+        let sum: Vec<ArrayRef> = sum
+            .unwrap()
+            .into_iter()
+            .map(|p| Arc::new(p) as ArrayRef)
+            .collect();
+        dataframe = dataframe.with_column(
+            "lat_lng_sum",
+            Column::from_arrays(sum, Field::new("lat_lng_sum", DataType::Float64, true)),
+        );
+
+        let city = dataframe.column_by_name("city");
+        let lowercase = ScalarFunctions::lower(column_to_arrays_str(city));
+        let lowercase: Vec<ArrayRef> = lowercase
+            .unwrap()
+            .into_iter()
+            .map(|p| Arc::new(p) as ArrayRef)
+            .collect();
+        dataframe = dataframe.with_column(
+            "city_lower",
+            Column::from_arrays(lowercase, Field::new("city_lower", DataType::Utf8, true)),
+        );
+
+        let write = dataframe.to_feather("./test/data/uk_cities");
+        assert!(write.is_ok());
     }
 }
