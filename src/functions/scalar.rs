@@ -289,19 +289,24 @@ impl ScalarFunctions {
     {
         scalar_op(array, |array| Ok(num::Float::log2(array)))
     }
-    pub fn lower(array: &BinaryArray) -> Result<BinaryArray, ArrowError> {
-        let mut b = BinaryBuilder::new(array.len());
-        for i in 0..array.len() {
-            if array.is_null(i) {
-                b.append(false)?
-            } else {
-                match &::std::str::from_utf8(array.value(i)) {
-                    Ok(string) => b.append_string(&string.to_lowercase())?,
-                    _ => b.append(false)?,
+    pub fn lower(arrays: Vec<&BinaryArray>) -> Result<Vec<BinaryArray>, ArrowError> {
+        arrays
+            .iter()
+            .map(|array| {
+                let mut b = BinaryBuilder::new(array.len());
+                for i in 0..array.len() {
+                    if array.is_null(i) {
+                        b.append(false)?
+                    } else {
+                        match &::std::str::from_utf8(array.value(i)) {
+                            Ok(string) => b.append_string(&string.to_lowercase())?,
+                            _ => b.append(false)?,
+                        }
+                    }
                 }
-            }
-        }
-        Ok(b.finish())
+                Ok(b.finish())
+            })
+            .collect()
     }
     pub fn lpad() {}
     pub fn ltrim(array: Vec<&BinaryArray>) -> Result<Vec<BinaryArray>, ArrowError> {
@@ -445,19 +450,24 @@ impl ScalarFunctions {
     fn unbase64() {}
     fn unhex() {}
     fn unix_timestamp() {}
-    pub fn upper(array: &BinaryArray) -> Result<BinaryArray, ArrowError> {
-        let mut b = BinaryBuilder::new(array.len());
-        for i in 0..array.len() {
-            if array.is_null(i) {
-                b.append(false)?
-            } else {
-                match &::std::str::from_utf8(array.value(i)) {
-                    Ok(string) => b.append_string(&string.to_uppercase())?,
-                    _ => b.append(false)?,
+    pub fn upper(arrays: Vec<&BinaryArray>) -> Result<Vec<BinaryArray>, ArrowError> {
+        arrays
+            .iter()
+            .map(|array| {
+                let mut b = BinaryBuilder::new(array.len());
+                for i in 0..array.len() {
+                    if array.is_null(i) {
+                        b.append(false)?
+                    } else {
+                        match &::std::str::from_utf8(array.value(i)) {
+                            Ok(string) => b.append_string(&string.to_uppercase())?,
+                            _ => b.append(false)?,
+                        }
+                    }
                 }
-            }
-        }
-        Ok(b.finish())
+                Ok(b.finish())
+            })
+            .collect()
     }
     fn week_of_year() {}
     // this will be interesting to implement
@@ -796,16 +806,19 @@ mod tests {
 
     #[test]
     fn test_str_upper_and_lower() {
-        let mut builder = BinaryBuilder::new(10);
+        let mut builder = BinaryBuilder::new(14);
         builder.append_string("Hello").unwrap();
         builder.append_string("Arrow").unwrap();
+        builder.append_string("农历新年").unwrap();
         let array = builder.finish();
-        let lower = ScalarFunctions::lower(&array).unwrap();
-        assert_eq!("hello", lower.get_string(0));
-        assert_eq!("arrow", lower.get_string(1));
-        let upper = ScalarFunctions::upper(&array).unwrap();
-        assert_eq!("HELLO", upper.get_string(0));
-        assert_eq!("ARROW", upper.get_string(1));
+        let lower = ScalarFunctions::lower(vec![&array]).unwrap();
+        assert_eq!("hello", lower[0].get_string(0));
+        assert_eq!("arrow", lower[0].get_string(1));
+        assert_eq!("农历新年", lower[0].get_string(2));
+        let upper = ScalarFunctions::upper(vec![&array]).unwrap();
+        assert_eq!("HELLO", upper[0].get_string(0));
+        assert_eq!("ARROW", upper[0].get_string(1));
+        assert_eq!("农历新年", upper[0].get_string(2));
     }
 
     #[bench]
