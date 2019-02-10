@@ -203,8 +203,7 @@ pub mod arrow {
                 }
 
                 #[allow(non_camel_case_types)]
-                const ENUM_VALUES_ENCODING: [Encoding; 2] =
-                    [Encoding::PLAIN, Encoding::DICTIONARY];
+                const ENUM_VALUES_ENCODING: [Encoding; 2] = [Encoding::PLAIN, Encoding::DICTIONARY];
 
                 #[allow(non_camel_case_types)]
                 const ENUM_NAMES_ENCODING: [&'static str; 2] = ["PLAIN", "DICTIONARY"];
@@ -370,8 +369,7 @@ pub mod arrow {
                     pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
                         _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
                         args: &'args PrimitiveArrayArgs,
-                    ) -> flatbuffers::WIPOffset<PrimitiveArray<'bldr>>
-                    {
+                    ) -> flatbuffers::WIPOffset<PrimitiveArray<'bldr>> {
                         let mut builder = PrimitiveArrayBuilder::new(_fbb);
                         builder.add_total_bytes(args.total_bytes);
                         builder.add_null_count(args.null_count);
@@ -398,10 +396,7 @@ pub mod arrow {
                     #[inline]
                     pub fn encoding(&self) -> Encoding {
                         self._tab
-                            .get::<Encoding>(
-                                PrimitiveArray::VT_ENCODING,
-                                Some(Encoding::PLAIN),
-                            )
+                            .get::<Encoding>(PrimitiveArray::VT_ENCODING, Some(Encoding::PLAIN))
                             .unwrap()
                     }
                     /// Relative memory offset of the start of the array data excluding
@@ -463,11 +458,8 @@ pub mod arrow {
                 impl<'a: 'b, 'b> PrimitiveArrayBuilder<'a, 'b> {
                     #[inline]
                     pub fn add_type_(&mut self, type_: Type) {
-                        self.fbb_.push_slot::<Type>(
-                            PrimitiveArray::VT_TYPE_,
-                            type_,
-                            Type::BOOL,
-                        );
+                        self.fbb_
+                            .push_slot::<Type>(PrimitiveArray::VT_TYPE_, type_, Type::BOOL);
                     }
                     #[inline]
                     pub fn add_encoding(&mut self, encoding: Encoding) {
@@ -489,19 +481,13 @@ pub mod arrow {
                     }
                     #[inline]
                     pub fn add_null_count(&mut self, null_count: i64) {
-                        self.fbb_.push_slot::<i64>(
-                            PrimitiveArray::VT_NULL_COUNT,
-                            null_count,
-                            0,
-                        );
+                        self.fbb_
+                            .push_slot::<i64>(PrimitiveArray::VT_NULL_COUNT, null_count, 0);
                     }
                     #[inline]
                     pub fn add_total_bytes(&mut self, total_bytes: i64) {
-                        self.fbb_.push_slot::<i64>(
-                            PrimitiveArray::VT_TOTAL_BYTES,
-                            total_bytes,
-                            0,
-                        );
+                        self.fbb_
+                            .push_slot::<i64>(PrimitiveArray::VT_TOTAL_BYTES, total_bytes, 0);
                     }
                     #[inline]
                     pub fn new(
@@ -546,8 +532,7 @@ pub mod arrow {
                     pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
                         _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
                         args: &'args CategoryMetadataArgs<'args>,
-                    ) -> flatbuffers::WIPOffset<CategoryMetadata<'bldr>>
-                    {
+                    ) -> flatbuffers::WIPOffset<CategoryMetadata<'bldr>> {
                         let mut builder = CategoryMetadataBuilder::new(_fbb);
                         if let Some(x) = args.levels {
                             builder.add_levels(x);
@@ -608,11 +593,8 @@ pub mod arrow {
                     }
                     #[inline]
                     pub fn add_ordered(&mut self, ordered: bool) {
-                        self.fbb_.push_slot::<bool>(
-                            CategoryMetadata::VT_ORDERED,
-                            ordered,
-                            false,
-                        );
+                        self.fbb_
+                            .push_slot::<bool>(CategoryMetadata::VT_ORDERED, ordered, false);
                     }
                     #[inline]
                     pub fn new(
@@ -657,8 +639,7 @@ pub mod arrow {
                     pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
                         _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
                         args: &'args TimestampMetadataArgs<'args>,
-                    ) -> flatbuffers::WIPOffset<TimestampMetadata<'bldr>>
-                    {
+                    ) -> flatbuffers::WIPOffset<TimestampMetadata<'bldr>> {
                         let mut builder = TimestampMetadataBuilder::new(_fbb);
                         if let Some(x) = args.timezone {
                             builder.add_timezone(x);
@@ -673,10 +654,7 @@ pub mod arrow {
                     #[inline]
                     pub fn unit(&self) -> TimeUnit {
                         self._tab
-                            .get::<TimeUnit>(
-                                TimestampMetadata::VT_UNIT,
-                                Some(TimeUnit::SECOND),
-                            )
+                            .get::<TimeUnit>(TimestampMetadata::VT_UNIT, Some(TimeUnit::SECOND))
                             .unwrap()
                     }
                     /// Timestamp data is assumed to be UTC, but the time zone is stored
@@ -717,10 +695,7 @@ pub mod arrow {
                         );
                     }
                     #[inline]
-                    pub fn add_timezone(
-                        &mut self,
-                        timezone: flatbuffers::WIPOffset<&'b str>,
-                    ) {
+                    pub fn add_timezone(&mut self, timezone: flatbuffers::WIPOffset<&'b str>) {
                         self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(
                             TimestampMetadata::VT_TIMEZONE,
                             timezone,
@@ -841,10 +816,7 @@ pub mod arrow {
                     #[inline]
                     pub fn unit(&self) -> TimeUnit {
                         self._tab
-                            .get::<TimeUnit>(
-                                TimeMetadata::VT_UNIT,
-                                Some(TimeUnit::SECOND),
-                            )
+                            .get::<TimeUnit>(TimeMetadata::VT_UNIT, Some(TimeUnit::SECOND))
                             .unwrap()
                     }
                 }
@@ -942,10 +914,8 @@ pub mod arrow {
 
                     #[inline]
                     pub fn name(&self) -> Option<&'a str> {
-                        self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(
-                            Column::VT_NAME,
-                            None,
-                        )
+                        self._tab
+                            .get::<flatbuffers::ForwardsUOffset<&str>>(Column::VT_NAME, None)
                     }
                     #[inline]
                     pub fn values(&self) -> Option<PrimitiveArray<'a>> {
@@ -958,10 +928,7 @@ pub mod arrow {
                     #[inline]
                     pub fn metadata_type(&self) -> TypeMetadata {
                         self._tab
-                            .get::<TypeMetadata>(
-                                Column::VT_METADATA_TYPE,
-                                Some(TypeMetadata::NONE),
-                            )
+                            .get::<TypeMetadata>(Column::VT_METADATA_TYPE, Some(TypeMetadata::NONE))
                             .unwrap()
                     }
                     #[inline]
@@ -982,9 +949,7 @@ pub mod arrow {
                     }
                     #[inline]
                     #[allow(non_snake_case)]
-                    pub fn metadata_as_category_metadata(
-                        &'a self,
-                    ) -> Option<CategoryMetadata> {
+                    pub fn metadata_as_category_metadata(&'a self) -> Option<CategoryMetadata> {
                         if self.metadata_type() == TypeMetadata::CategoryMetadata {
                             self.metadata()
                                 .map(|u| CategoryMetadata::init_from_table(u))
@@ -995,9 +960,7 @@ pub mod arrow {
 
                     #[inline]
                     #[allow(non_snake_case)]
-                    pub fn metadata_as_timestamp_metadata(
-                        &'a self,
-                    ) -> Option<TimestampMetadata> {
+                    pub fn metadata_as_timestamp_metadata(&'a self) -> Option<TimestampMetadata> {
                         if self.metadata_type() == TypeMetadata::TimestampMetadata {
                             self.metadata()
                                 .map(|u| TimestampMetadata::init_from_table(u))
@@ -1031,8 +994,7 @@ pub mod arrow {
                     pub name: Option<flatbuffers::WIPOffset<&'a str>>,
                     pub values: Option<flatbuffers::WIPOffset<PrimitiveArray<'a>>>,
                     pub metadata_type: TypeMetadata,
-                    pub metadata:
-                        Option<flatbuffers::WIPOffset<flatbuffers::UnionWIPOffset>>,
+                    pub metadata: Option<flatbuffers::WIPOffset<flatbuffers::UnionWIPOffset>>,
                     pub user_metadata: Option<flatbuffers::WIPOffset<&'a str>>,
                 }
                 impl<'a> Default for ColumnArgs<'a> {
@@ -1054,10 +1016,8 @@ pub mod arrow {
                 impl<'a: 'b, 'b> ColumnBuilder<'a, 'b> {
                     #[inline]
                     pub fn add_name(&mut self, name: flatbuffers::WIPOffset<&'b str>) {
-                        self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(
-                            Column::VT_NAME,
-                            name,
-                        );
+                        self.fbb_
+                            .push_slot_always::<flatbuffers::WIPOffset<_>>(Column::VT_NAME, name);
                     }
                     #[inline]
                     pub fn add_values(
@@ -1166,10 +1126,8 @@ pub mod arrow {
                     /// Some text (or a name) metadata about what the file is, optional
                     #[inline]
                     pub fn description(&self) -> Option<&'a str> {
-                        self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(
-                            CTable::VT_DESCRIPTION,
-                            None,
-                        )
+                        self._tab
+                            .get::<flatbuffers::ForwardsUOffset<&str>>(CTable::VT_DESCRIPTION, None)
                     }
                     #[inline]
                     pub fn num_rows(&self) -> i64 {
@@ -1178,9 +1136,8 @@ pub mod arrow {
                     #[inline]
                     pub fn columns(
                         &self,
-                    ) -> Option<
-                        flatbuffers::Vector<flatbuffers::ForwardsUOffset<Column<'a>>>,
-                    > {
+                    ) -> Option<flatbuffers::Vector<flatbuffers::ForwardsUOffset<Column<'a>>>>
+                    {
                         self._tab.get::<flatbuffers::ForwardsUOffset<
                             flatbuffers::Vector<flatbuffers::ForwardsUOffset<Column<'a>>>,
                         >>(CTable::VT_COLUMNS, None)
@@ -1193,10 +1150,8 @@ pub mod arrow {
                     /// Table metadata (likely JSON), not yet used
                     #[inline]
                     pub fn metadata(&self) -> Option<&'a str> {
-                        self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(
-                            CTable::VT_METADATA,
-                            None,
-                        )
+                        self._tab
+                            .get::<flatbuffers::ForwardsUOffset<&str>>(CTable::VT_METADATA, None)
                     }
                 }
 
@@ -1205,10 +1160,7 @@ pub mod arrow {
                     pub num_rows: i64,
                     pub columns: Option<
                         flatbuffers::WIPOffset<
-                            flatbuffers::Vector<
-                                'a,
-                                flatbuffers::ForwardsUOffset<Column<'a>>,
-                            >,
+                            flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<Column<'a>>>,
                         >,
                     >,
                     pub version: i32,
@@ -1249,10 +1201,7 @@ pub mod arrow {
                     pub fn add_columns(
                         &mut self,
                         columns: flatbuffers::WIPOffset<
-                            flatbuffers::Vector<
-                                'b,
-                                flatbuffers::ForwardsUOffset<Column<'b>>,
-                            >,
+                            flatbuffers::Vector<'b, flatbuffers::ForwardsUOffset<Column<'b>>>,
                         >,
                     ) {
                         self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(
@@ -1265,10 +1214,7 @@ pub mod arrow {
                         self.fbb_.push_slot::<i32>(CTable::VT_VERSION, version, 0);
                     }
                     #[inline]
-                    pub fn add_metadata(
-                        &mut self,
-                        metadata: flatbuffers::WIPOffset<&'b str>,
-                    ) {
+                    pub fn add_metadata(&mut self, metadata: flatbuffers::WIPOffset<&'b str>) {
                         self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(
                             CTable::VT_METADATA,
                             metadata,

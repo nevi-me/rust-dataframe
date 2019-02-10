@@ -1,5 +1,5 @@
 //! Feather Reader and Writer
-//! 
+//!
 //! **Feather can be considered as deprecated, and is not suitable for long term storage.
 //! We only include its support temporarily until Arrow has more IO support.**
 //!
@@ -74,9 +74,7 @@ fn get_data_type(dtype: fbs::Type) -> DataType {
         fbs::Type::DOUBLE => DataType::Float64,
         fbs::Type::UTF8 => DataType::Utf8,
         fbs::Type::BINARY => DataType::Utf8,
-        fbs::Type::CATEGORY => {
-            unimplemented!("Reading CATEGORY type columns not implemented")
-        }
+        fbs::Type::CATEGORY => unimplemented!("Reading CATEGORY type columns not implemented"),
         fbs::Type::TIMESTAMP | fbs::Type::DATE | fbs::Type::TIME => {
             unimplemented!("Reading date and time fields not implemented")
         }
@@ -105,9 +103,7 @@ fn get_fbs_type(dtype: DataType) -> fbs::Type {
         Time32(_) | Time64(_) => TIME,
         Interval(_) => unimplemented!("Interval type not supported"),
         Utf8 => UTF8,
-        List(_) | Struct(_) => {
-            unimplemented!("Lists and Structs types are not supported")
-        }
+        List(_) | Struct(_) => unimplemented!("Lists and Structs types are not supported"),
     }
 }
 
@@ -264,10 +260,8 @@ impl<R: Read + Seek> FeatherReader<R> {
                     let strings: Vec<String> = string_pos
                         .windows(2)
                         .map(|w| {
-                            String::from_utf8(
-                                buffer[(w[0] as usize)..(w[1] as usize)].to_vec(),
-                            )
-                            .unwrap()
+                            String::from_utf8(buffer[(w[0] as usize)..(w[1] as usize)].to_vec())
+                                .unwrap()
                         })
                         .collect();
 
@@ -289,19 +283,15 @@ impl<R: Read + Seek> FeatherReader<R> {
                     let arr = builder.finish();
                     arrays.push(Arc::new(arr));
 
-                    let field = Field::new(
-                        name,
-                        get_data_type(array.type_()),
-                        array.null_count() > 0,
-                    );
+                    let field =
+                        Field::new(name, get_data_type(array.type_()), array.null_count() > 0);
                     fields.push(field);
                 }
                 fbs::TypeMetadata::TimestampMetadata
                 | fbs::TypeMetadata::DateMetadata
                 | fbs::TypeMetadata::TimeMetadata => {
                     return Err(ArrowError::IoError(
-                        "Date/time Feather records are currently not supported."
-                            .to_string(),
+                        "Date/time Feather records are currently not supported.".to_string(),
                     ));
                 }
                 fbs::TypeMetadata::NONE => {
@@ -323,8 +313,7 @@ impl<R: Read + Seek> FeatherReader<R> {
                     assert!(last_offset > 0);
 
                     // create field
-                    let field =
-                        Field::new(name, get_data_type(array.type_()), null_count > 0);
+                    let field = Field::new(name, get_data_type(array.type_()), null_count > 0);
                     fields.push(field);
 
                     let array_ref = if &dtype == &DataType::Utf8 {
@@ -548,14 +537,12 @@ impl FeatherWriter for RecordBatch {
                 }
                 DataType::Float16 => {
                     return Err(ArrowError::IoError(
-                        "DataType::Float16 is currently not supported by Rust Arrow"
-                            .to_string(),
+                        "DataType::Float16 is currently not supported by Rust Arrow".to_string(),
                     ));
                 }
                 DataType::List(_) | DataType::Struct(_) => {
                     return Err(ArrowError::IoError(
-                        "Writing of lists and structs not supported in Feather"
-                            .to_string(),
+                        "Writing of lists and structs not supported in Feather".to_string(),
                     ));
                 }
                 DataType::Timestamp(_)
@@ -564,8 +551,7 @@ impl FeatherWriter for RecordBatch {
                 | DataType::Time64(_)
                 | DataType::Interval(_) => {
                     return Err(ArrowError::IoError(
-                        "Date and time formats currently not supported by Rust Arrow"
-                            .to_string(),
+                        "Date and time formats currently not supported by Rust Arrow".to_string(),
                     ));
                 }
             }

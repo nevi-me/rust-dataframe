@@ -14,14 +14,20 @@ impl AggregateFunctions {
         T: ArrowNumericType,
         T::Native: std::cmp::Ord,
     {
-        arrays.iter().map(|array| array_ops::max(array).unwrap()).max()
+        arrays
+            .iter()
+            .map(|array| array_ops::max(array).unwrap())
+            .max()
     }
     pub fn min<T>(arrays: Vec<&PrimitiveArray<T>>) -> Option<T::Native>
     where
         T: ArrowNumericType,
         T::Native: std::cmp::Ord,
     {
-        arrays.iter().map(|array| array_ops::max(array).unwrap()).max()
+        arrays
+            .iter()
+            .map(|array| array_ops::max(array).unwrap())
+            .max()
     }
     // pub fn avg<T>(array: &PrimitiveArray<T>) -> Option<f64>
     // where
@@ -39,14 +45,16 @@ impl AggregateFunctions {
     // }
 
     /// Count returns the number of non-null values in the array/column.
-    /// 
+    ///
     /// For the number of all values, use `len()`
     pub fn count<T>(arrays: Vec<&PrimitiveArray<T>>) -> Option<i64>
     where
         T: ArrowPrimitiveType,
     {
         let mut sum = 0;
-        arrays.iter().for_each(|array| sum += (array.len() - array.null_count()) as i64);
+        arrays
+            .iter()
+            .for_each(|array| sum += (array.len() - array.null_count()) as i64);
 
         Some(sum)
     }
@@ -57,10 +65,11 @@ impl AggregateFunctions {
         T::Native: Add<Output = T::Native>,
     {
         let mut sum = T::default_value();
-        arrays.iter().for_each(|array| sum = sum + array_ops::sum(array).unwrap_or(T::default_value()));
+        arrays
+            .iter()
+            .for_each(|array| sum = sum + array_ops::sum(array).unwrap_or(T::default_value()));
 
         Some(sum)
-        
     }
     pub fn first() {}
     pub fn kurtosis() {}
@@ -90,10 +99,10 @@ mod tests {
         assert_eq!(b.value(0), d.value(0));
     }
 
-       #[test]
-       fn test_aggregate_count() {
-           let a = Int32Array::from(vec![5, 6, 7, 8, 9]);
-           let c = AggregateFunctions::count(vec![&a]).unwrap();
-           assert_eq!(5, c);
-       }
+    #[test]
+    fn test_aggregate_count() {
+        let a = Int32Array::from(vec![5, 6, 7, 8, 9]);
+        let c = AggregateFunctions::count(vec![&a]).unwrap();
+        assert_eq!(5, c);
+    }
 }

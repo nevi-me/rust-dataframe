@@ -67,9 +67,9 @@ pub struct DataFrame {
     columns: Vec<Column>,
 }
 
-struct CsvDataSource {
-    reader: CsvReader,
-}
+// struct CsvDataSource {
+//     reader: CsvReader,
+// }
 
 // impl Iterator for CsvDataSource {
 //    type Item = Result<RecordBatch, DataFrameError>;
