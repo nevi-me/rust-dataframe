@@ -1,3 +1,4 @@
+use array_tool::vec::*;
 use arrow::array::*;
 use arrow::builder::*;
 use arrow::datatypes::*;
@@ -35,10 +36,108 @@ impl ArrayFunctions {
         }
         Ok(b.finish())
     }
-    fn array_distinct() {}
-    fn array_except() {}
-    fn array_intersect() {}
     fn array_join() {}
+    fn array_distinct<T>(array: &ListArray) -> Result<ListArray, ArrowError>
+    where
+        T: ArrowPrimitiveType + ArrowNumericType,
+    {
+        let values_builder: PrimitiveBuilder<T> = PrimitiveBuilder::new(array.values().len());
+        let mut b = ListBuilder::new(values_builder);
+        // get array datatype so we can downcast appropriately
+        let data_type = array.value_type();
+        for i in 0..array.len() {
+            if array.is_null(i) {
+                b.append(true)?
+            } else {
+                let values = array.values();
+                let values = values.as_any().downcast_ref::<PrimitiveArray<T>>().unwrap();
+                let values = values.value_slice(
+                    array.value_offset(i) as usize,
+                    array.value_length(i) as usize,
+                ).to_vec();
+                let u = values.unique();
+                // TODO check how nulls are treated here
+                u.iter().for_each(|x| b.values().append_value(*x).unwrap());
+            }
+        }
+        Ok(b.finish())
+    }
+    pub fn array_except<T>(a: &ListArray, b: &ListArray) -> Result<ListArray, ArrowError> 
+    where
+        T: ArrowPrimitiveType + ArrowNumericType,
+        T::Native: std::cmp::PartialEq<T::Native> + std::cmp::Ord,
+    {
+        // check that lengths of both arrays are equal
+        if a.len() != b.len() {
+            return Err(ArrowError::ComputeError("Expected array a and b to have the same length".to_string()))
+        }
+        let values_builder: PrimitiveBuilder<T> = PrimitiveBuilder::new(a.values().len());
+        let mut c = ListBuilder::new(values_builder);
+        // get array datatype so we can downcast appropriately
+        let data_type = a.value_type();
+        for i in 0..a.len() {
+            if a.is_null(i) {
+                c.append(true)?
+            } else {
+                let a_values = a.values();
+                let a_values = a_values.as_any().downcast_ref::<PrimitiveArray<T>>().unwrap();
+                let a_values = a_values.value_slice(
+                    a.value_offset(i) as usize,
+                    a.value_length(i) as usize,
+                ).to_vec();
+                let b_values = b.values();
+                let b_values = b_values.as_any().downcast_ref::<PrimitiveArray<T>>().unwrap();
+                let b_values = b_values.value_slice(
+                    b.value_offset(i) as usize,
+                    b.value_length(i) as usize,
+                ).to_vec();
+
+                let u = a_values.uniq(b_values);
+                // TODO check how nulls are treated here
+                u.iter().for_each(|x| c.values().append_value(*x).unwrap());
+                c.append(true)?;
+            }
+        }
+        Ok(c.finish())
+    }
+    pub fn array_intersect<T>(a: &ListArray, b: &ListArray) -> Result<ListArray, ArrowError> 
+    where
+        T: ArrowPrimitiveType + ArrowNumericType,
+        T::Native: std::cmp::PartialEq<T::Native> + std::cmp::Ord,
+    {
+        // check that lengths of both arrays are equal
+        if a.len() != b.len() {
+            return Err(ArrowError::ComputeError("Expected array a and b to have the same length".to_string()))
+        }
+        let values_builder: PrimitiveBuilder<T> = PrimitiveBuilder::new(a.values().len());
+        let mut c = ListBuilder::new(values_builder);
+        // get array datatype so we can downcast appropriately
+        let data_type = a.value_type();
+        for i in 0..a.len() {
+            if a.is_null(i) {
+                c.append(true)?
+            } else {
+                let a_values = a.values();
+                let a_values = a_values.as_any().downcast_ref::<PrimitiveArray<T>>().unwrap();
+                let a_values = a_values.value_slice(
+                    a.value_offset(i) as usize,
+                    a.value_length(i) as usize,
+                ).to_vec();
+                let b_values = b.values();
+                let b_values = b_values.as_any().downcast_ref::<PrimitiveArray<T>>().unwrap();
+                let b_values = b_values.value_slice(
+                    b.value_offset(i) as usize,
+                    b.value_length(i) as usize,
+                ).to_vec();
+
+                let u = a_values.intersect(b_values);
+                // TODO check how nulls are treated here
+                u.iter().for_each(|x| c.values().append_value(*x).unwrap());
+                c.append(true)?;
+            }
+        }
+        Ok(c.finish())
+    }
     pub fn array_max<T>(array: &ListArray) -> Result<PrimitiveArray<T>, ArrowError>
     where
         T: ArrowPrimitiveType + ArrowNumericType,
@@ -90,7 +189,7 @@ impl ArrayFunctions {
 
     /// Locates the position of the first occurrence of the given value in the given array.
     /// Returns 0 if element is not found, otherwise a 1-based index with the position in the array.
-    fn array_position<T>(array: &ListArray, val: T::Native) -> Result<Int32Array, ArrowError>
+    pub fn array_position<T>(array: &ListArray, val: T::Native) -> Result<Int32Array, ArrowError>
     where
         T: ArrowPrimitiveType + ArrowNumericType,
         T::Native: std::cmp::PartialEq<T::Native>,
@@ -119,7 +218,7 @@ impl ArrayFunctions {
     }
 
     /// Remove all elements that equal the given element in the array
-    fn array_remove<T>(array: &ListArray, val: T::Native) -> Result<ListArray, ArrowError>
+    pub fn array_remove<T>(array: &ListArray, val: T::Native) -> Result<ListArray, ArrowError>
     where
         T: ArrowPrimitiveType + ArrowNumericType,
         T::Native: std::cmp::PartialEq<T::Native>,
@@ -149,7 +248,36 @@ impl ArrayFunctions {
         }
         Ok(b.finish())
     }
-    fn array_repeat() {}
+
+    /// TODO: extract repetitive code and share with other array fns that use `array_tool` crate
+    pub fn array_repeat<T>(array: &ListArray, count: i32) -> Result<ListArray, ArrowError> 
+    where
+        T: ArrowPrimitiveType + ArrowNumericType,
+        T::Native: std::cmp::PartialEq<T::Native> + std::cmp::Ord,
+    {
+        let values_builder: PrimitiveBuilder<T> = PrimitiveBuilder::new(array.values().len());
+        let mut c = ListBuilder::new(values_builder);
+        // get array datatype so we can downcast appropriately
+        let data_type = array.value_type();
+        for i in 0..array.len() {
+            if array.is_null(i) {
+                c.append(true)?
+            } else {
+                let values = array.values();
+                let values = values.as_any().downcast_ref::<PrimitiveArray<T>>().unwrap();
+                let values = values.value_slice(
+                    array.value_offset(i) as usize,
+                    array.value_length(i) as usize,
+                ).to_vec();
+
+                let u = values.times(count);
+                // TODO check how nulls are treated here
+                u.iter().for_each(|x| c.values().append_value(*x).unwrap());
+                c.append(true)?;
+            }
+        }
+        Ok(c.finish())
+    }
 
     /// Sorts the input array in ascending order. 
     /// 
@@ -182,7 +310,44 @@ impl ArrayFunctions {
         }
         Ok(b.finish())
     }
-    fn array_union() {}
+    pub fn array_union<T>(a: &ListArray, b: &ListArray) -> Result<ListArray, ArrowError> 
+    where
+        T: ArrowPrimitiveType + ArrowNumericType,
+        T::Native: std::cmp::PartialEq<T::Native> + std::cmp::Ord,
+    {
+        // check that lengths of both arrays are equal
+        if a.len() != b.len() {
+            return Err(ArrowError::ComputeError("Expected array a and b to have the same length".to_string()))
+        }
+        let values_builder: PrimitiveBuilder<T> = PrimitiveBuilder::new(a.values().len());
+        let mut c = ListBuilder::new(values_builder);
+        // get array datatype so we can downcast appropriately
+        let data_type = a.value_type();
+        for i in 0..a.len() {
+            if a.is_null(i) {
+                c.append(true)?
+            } else {
+                let a_values = a.values();
+                let a_values = a_values.as_any().downcast_ref::<PrimitiveArray<T>>().unwrap();
+                let a_values = a_values.value_slice(
+                    a.value_offset(i) as usize,
+                    a.value_length(i) as usize,
+                ).to_vec();
+                let b_values = b.values();
+                let b_values = b_values.as_any().downcast_ref::<PrimitiveArray<T>>().unwrap();
+                let b_values = b_values.value_slice(
+                    b.value_offset(i) as usize,
+                    b.value_length(i) as usize,
+                ).to_vec();
+
+                let u = a_values.union(b_values);
+                // TODO check how nulls are treated here
+                u.iter().for_each(|x| c.values().append_value(*x).unwrap());
+                c.append(true)?;
+            }
+        }
+        Ok(c.finish())
+    }
     fn arrays_overlap() {}
     fn arrays_zip() {}
 
