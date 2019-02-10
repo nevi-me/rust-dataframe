@@ -7,4 +7,5 @@ edition = "2018"
 [dependencies]
 arrow = { git = "https://github.com/apache/arrow"}
 num = "0.2"
-num-traits = "0.2"
+num-traits = "0.2"byteorder = "1"
+flatbuffers = "0.5"

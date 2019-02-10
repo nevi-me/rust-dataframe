@@ -7,4 +7,5 @@
 mod dataframe;
 mod error;
 mod functions;
+mod io;
 mod table;
