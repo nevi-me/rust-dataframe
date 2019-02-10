@@ -346,11 +346,14 @@ impl DataFrame {
 
         Ok(DataFrame {
             schema,
-            columns: table.columns
+            columns: table.columns,
         })
     }
 
-    // /// Write dataframe to a feather file
+    /// Write dataframe to a feather file
+    ///
+    /// Data is currently written as individual batches (as Arrow doesn't yet support slicing).
+    /// This will be rectified when the above condition is met.
     pub fn to_feather(&self, path: &str) -> Result<(), ArrowError> {
         use crate::io::feather::*;
 
