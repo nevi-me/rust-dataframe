@@ -6,6 +6,7 @@ use arrow::array_data::ArrayDataRef;
 use arrow::csv::Reader as CsvReader;
 use arrow::csv::ReaderBuilder as CsvReaderBuilder;
 use arrow::datatypes::*;
+use arrow::error::ArrowError;
 use arrow::record_batch::RecordBatch;
 use std::fs::File;
 use std::sync::Arc;
@@ -112,6 +113,10 @@ impl DataFrame {
         self.columns.len()
     }
 
+    pub fn num_chunks(&self) -> usize {
+        self.column(0).data.num_chunks()
+    }
+
     pub fn num_rows(&self) -> usize {
         self.columns[0].data.num_rows()
     }
@@ -155,12 +160,41 @@ impl DataFrame {
     /// Returns dataframe as an Arrow `RecordBatch`
     /// TODO: add a method to break into smaller batches
     fn to_record_batches(&self) -> Vec<RecordBatch> {
-        let batches: Vec<RecordBatch> = Vec::with_capacity(self.column(0).data().num_chunks());
-        for i in 0..self.num_columns() {
-            unimplemented!("We currently do not get batches, this should live in dataframe")
+        let num_chunks = self.column(0).data().num_chunks();
+        let num_columns = self.num_columns();
+        let mut batches: Vec<RecordBatch> = Vec::with_capacity(num_chunks);
+        let mut arrays: Vec<Vec<ArrayRef>> = Vec::with_capacity(num_chunks);
+        // for i in 0..self.num_columns() {
+        //     let column = self.column(i);
+        //     if i == 0 {
+        //         arrays.push(vec![]);
+        //     }
+        //     for j in 0..column.data().num_chunks() {
+        //         arrays[i].push(column.data().chunk(j).to_owned());
+        //     }
+        // }
+
+        for i in 0..num_chunks {
+            let mut arr = vec![];
+
+            // if i == 0 {
+            //     arrays.push(vec![]);
+            // }
+            for j in 0..num_columns {
+                let column = self.column(j);
+                arr.push(column.data().chunk(i).to_owned());
+            }
+
+            arrays.push(arr);
+            dbg!("pushed array");
         }
+
+        arrays.into_iter().for_each(|array| {
+            dbg!(array.len());
+            batches.push(RecordBatch::new(self.schema.clone(), array));
+        });
+
         batches
-        // RecordBatch::new(self.schema.clone(), self.columns)
     }
 
     /// Returns dataframe with the first n records selected
@@ -300,7 +334,7 @@ impl DataFrame {
                 let builder = CsvReaderBuilder::new()
                     .infer_schema(None)
                     .has_headers(true)
-                    .with_batch_size(6);
+                    .with_batch_size(1024);
                 builder.build(file).unwrap()
             }
         };
