@@ -87,7 +87,33 @@ impl ArrayFunctions {
         }
         Ok(b.finish())
     }
-    fn array_position() {}
+    fn array_position<T>(array: &ListArray, val: T::Native) -> Result<Int32Array, ArrowError>
+    where
+        T: ArrowPrimitiveType + ArrowNumericType,
+        T::Native: std::cmp::PartialEq<T::Native>,
+    {
+        let mut b = Int32Builder::new(array.len());
+        // get array datatype so we can downcast appropriately
+        let data_type = array.value_type();
+        for i in 0..array.len() {
+            if array.is_null(i) {
+                b.append_value(0)?
+            } else {
+                let values = array.values();
+                let values = values.as_any().downcast_ref::<PrimitiveArray<T>>().unwrap();
+                let values = values.value_slice(
+                    array.value_offset(i) as usize,
+                    array.value_length(i) as usize,
+                );
+                let pos = values.iter().position(|x| x == &val);
+                match pos {
+                    Some(pos) => b.append_value((pos + 1) as i32)?,
+                    None => b.append_value(0)?,
+                };
+            }
+        }
+        Ok(b.finish())
+    }
     fn array_remove() {}
     fn array_repeat() {}
     fn array_sort() {}
@@ -197,5 +223,31 @@ mod tests {
         assert_eq!(true, bools.value(3));
         assert_eq!(true, bools.value(4));
         assert_eq!(false, bools.value(5));
+    }
+
+    #[test]
+    fn test_array_position() {
+        // Construct a value array
+        let value_data =
+            Int64Array::from(vec![0, 0, 0, 1, 2, 1, 3, 4, 5, 1, 3, 2, 3, 2, 8, 3]).data();
+
+        let value_offsets = Buffer::from(&[0, 3, 6, 8, 12, 14, 16].to_byte_slice());
+
+        // Construct a list array from the above two
+        let list_data_type = DataType::List(Box::new(DataType::Int64));
+        let list_data = ArrayData::builder(list_data_type.clone())
+            .len(6)
+            .add_buffer(value_offsets.clone())
+            .add_child_data(value_data.clone())
+            .build();
+        let list_array = ListArray::from(list_data);
+
+        let bools = ArrayFunctions::array_position::<Int64Type>(&list_array, 2).unwrap();
+        assert_eq!(0, bools.value(0));
+        assert_eq!(2, bools.value(1));
+        assert_eq!(0, bools.value(2));
+        assert_eq!(4, bools.value(3));
+        assert_eq!(2, bools.value(4));
+        assert_eq!(0, bools.value(5));
     }
 }
