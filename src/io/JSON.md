@@ -4,9 +4,9 @@ This is a brain-dump of what we want to achieve with JSON IO.
 
 ### Reader
 
-- [ ] Read user schema
+- [X] Read user schema
 - [ ] Support other numeric types other than `Float64, Int64`
-- [ ] Infer schema (basic)
+- [X] Infer schema (basic)
 - [ ] Infer schema (lists and structs)
 - [ ] Coerce fields that have scalars and lists to lists
 - [ ] Support projection using field names
