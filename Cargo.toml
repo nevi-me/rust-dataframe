@@ -13,3 +13,5 @@ csv = "1"
 byteorder = "1"
 flatbuffers = "0.5"
 array_tool = "1"
+# TODO: using this to return schema with preserved order
+serde_json = {version = "1", features = ["preserve_order"]}

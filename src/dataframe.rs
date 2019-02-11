@@ -1,3 +1,5 @@
+use crate::io::json::Reader as JsonReader;
+use crate::io::json::ReaderBuilder as JsonReaderBuilder;
 use crate::table::Column;
 use crate::utils;
 use arrow::array;
@@ -11,6 +13,7 @@ use arrow::error::ArrowError;
 use arrow::record_batch::RecordBatch;
 use std::fs::File;
 use std::sync::Arc;
+use std::io::BufReader;
 
 use crate::error::DataFrameError;
 
@@ -361,6 +364,47 @@ impl DataFrame {
             schema,
             columns: table.columns,
         })
+    }
+
+    pub fn from_json(path: &str, schema: Option<Arc<Schema>>) -> Self {
+        let file = File::open(path).unwrap();
+        let mut reader = match schema {
+            Some(schema) => JsonReader::new(BufReader::new(file), schema, 1024, None),
+            None => {
+                let builder = JsonReaderBuilder::new()
+                    .infer_schema(None)
+                    .with_batch_size(1024);
+                builder.build::<File>(file).unwrap()
+            }
+        };
+        let mut batches: Vec<RecordBatch> = vec![];
+        let mut has_next = true;
+        while has_next {
+            match reader.next() {
+                Ok(batch) => match batch {
+                    Some(batch) => {
+                        batches.push(batch);
+                    }
+                    None => {
+                        has_next = false;
+                    }
+                },
+                Err(e) => {
+                    has_next = false;
+                }
+            }
+        }
+
+        let schema: Arc<Schema> = batches[0].schema().clone();
+
+        // convert to an arrow table
+        let table = crate::table::Table::from_record_batches(schema.clone(), batches);
+
+        // DataFrame::from_table(table)
+        DataFrame {
+            schema,
+            columns: table.columns,
+        }
     }
 
     /// Write dataframe to a feather file
