@@ -10,47 +10,18 @@ use arrow::error::ArrowError;
 use arrow::record_batch::RecordBatch;
 use serde_json::Value;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum JsonType {
-    Bool,
-    Int,
-    Float,
-    Str,
-    BoolList,
-    IntList,
-    FloatList,
-    StrList,
-    Struct,
-}
 
-fn json_to_datatype(dtype: &JsonType) -> DataType {
-    use JsonType::*;
-    match dtype {
-        Bool => DataType::Boolean,
-        Int => DataType::Int64,
-        Float => DataType::Float64,
-        Str => DataType::Utf8,
-        // BoolList | IntList | FloatList | StrList => DataType::List(_),
-        // Struct => DataType::Struct(_),
-        _ => {
-            // lists and structs, return an error
-            unimplemented!("Lists and structs not yet supported")
-        }
-    }
-}
-
-fn generate_schema(spec: HashMap<String, HashSet<JsonType>>) -> Arc<Schema> {
+fn generate_schema(spec: HashMap<String, HashSet<DataType>>) -> Arc<Schema> {
     let fields = spec
         .iter()
         .map(|(k, hs)| {
-            let v: Vec<&JsonType> = hs.iter().collect();
+            let v: Vec<&DataType> = hs.iter().collect();
             match v.len() {
                 1 => {
-                    let dtype = json_to_datatype(v[0]);
-                    Field::new(k, dtype, true)
+                    Field::new(k, v[0].clone(), true)
                 }
                 2 => {
-                    if v.contains(&&JsonType::Float) && v.contains(&&JsonType::Int) {
+                    if v.contains(&&DataType::Float64) && v.contains(&&DataType::Int64) {
                         Field::new(k, DataType::Float64, true)
                     // } else if v.contains(JsonType::Bool) || v.contains(JsonType::Str) {
                     //     Field::new(k, DataType::Utf8, true)
@@ -77,7 +48,7 @@ fn infer_json_schema(
     file: File,
     max_read_records: Option<usize>,
 ) -> Result<Arc<Schema>, ArrowError> {
-    let mut values: HashMap<String, HashSet<JsonType>> = HashMap::new();
+    let mut values: HashMap<String, HashSet<DataType>> = HashMap::new();
     let mut reader = BufReader::new(file.try_clone()?);
 
     let mut line = String::new();
@@ -100,11 +71,11 @@ fn infer_json_schema(
                         Value::Bool(b) => {
                             if values.contains_key(k) {
                                 let x = values.get_mut(k).unwrap();
-                                x.insert(JsonType::Bool);
+                                x.insert(DataType::Boolean);
                             } else {
                                 // create hashset and add value type
                                 let mut hs = HashSet::new();
-                                hs.insert(JsonType::Bool);
+                                hs.insert(DataType::Boolean);
                                 values.insert(k.to_string(), hs);
                             }
                         }
@@ -115,22 +86,22 @@ fn infer_json_schema(
                             if n.is_f64() {
                                 if values.contains_key(k) {
                                     let x = values.get_mut(k).unwrap();
-                                    x.insert(JsonType::Float);
+                                    x.insert(DataType::Float64);
                                 } else {
                                     // create hashset and add value type
                                     let mut hs = HashSet::new();
-                                    hs.insert(JsonType::Float);
+                                    hs.insert(DataType::Float64);
                                     values.insert(k.to_string(), hs);
                                 }
                             } else {
                                 // default to i64
                                 if values.contains_key(k) {
                                     let x = values.get_mut(k).unwrap();
-                                    x.insert(JsonType::Int);
+                                    x.insert(DataType::Int64);
                                 } else {
                                     // create hashset and add value type
                                     let mut hs = HashSet::new();
-                                    hs.insert(JsonType::Int);
+                                    hs.insert(DataType::Int64);
                                     values.insert(k.to_string(), hs);
                                 }
                             }
@@ -138,11 +109,11 @@ fn infer_json_schema(
                         Value::String(_) => {
                             if values.contains_key(k) {
                                 let x = values.get_mut(k).unwrap();
-                                x.insert(JsonType::Str);
+                                x.insert(DataType::Utf8);
                             } else {
                                 // create hashset and add value type
                                 let mut hs = HashSet::new();
-                                hs.insert(JsonType::Str);
+                                hs.insert(DataType::Utf8);
                                 values.insert(k.to_string(), hs);
                             }
                         }
