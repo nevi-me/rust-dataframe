@@ -1,5 +1,3 @@
-use crate::io::json::Reader as JsonReader;
-use crate::io::json::ReaderBuilder as JsonReaderBuilder;
 use crate::table::Column;
 use crate::utils;
 use arrow::array;
@@ -10,10 +8,12 @@ use arrow::csv::Reader as CsvReader;
 use arrow::csv::ReaderBuilder as CsvReaderBuilder;
 use arrow::datatypes::*;
 use arrow::error::ArrowError;
+use arrow::json::Reader as JsonReader;
+use arrow::json::ReaderBuilder as JsonReaderBuilder;
 use arrow::record_batch::RecordBatch;
 use std::fs::File;
-use std::sync::Arc;
 use std::io::BufReader;
+use std::sync::Arc;
 
 use crate::error::DataFrameError;
 

@@ -1,8 +1,6 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 #![feature(try_trait)]
-// required for matching box in lists
-#![feature(box_syntax, box_patterns)]
 #![allow(dead_code)]
 #![feature(test)]
 

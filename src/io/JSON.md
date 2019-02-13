@@ -1,6 +1,6 @@
-## JSON IO Progress
+## JSON IO
 
-This is a brain-dump of what we want to achieve with JSON IO.
+Keeping track of what's supported upstream in Arrow's JSON reader
 
 ### Reader
 

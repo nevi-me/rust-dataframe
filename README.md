@@ -41,7 +41,7 @@ To that end, we're trying to support CSV, JSON, and perhaps other simpler file f
     - [X] Read
     - [ ] Write
   - [ ] JSON
-    - [X] Read
+    - [X] Read (submitted to Arrow)
     - [ ] Write
   - [ ] Feather
     - [X] Read
