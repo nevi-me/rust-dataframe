@@ -29,8 +29,28 @@ One can think of this library partly as a playground for features that could for
 
 ## Status
 
+### IO
+
+We found building this library with Arrow still having very limited IO options to be painful. To that end, we are implementing IO in some formats, some of which we can contribute upstream when happy with implementation details.
+
+To that end, we're trying to support CSV, JSON, and perhaps other simpler file formats.
+**Note on Feather:** The Feather file format support can be considered as deprecated in favour of Arrow IPC. Though we have implemented Feather, it's meant to be a stop-gap measure until Arrow supports IPC (in Rust). We'll try tackle this in the coming months.
+
+- IO Support
+  - [ ] CSV
+    - [X] Read
+    - [ ] Write
+  - [ ] JSON
+    - [X] Read (submitted to Arrow)
+    - [ ] Write
+  - [ ] Feather
+    - [X] Read
+    - [X] Write (**do not use**, the current limitation with slicing arrays means we write each record batch as a file, instead of a single file for all the data)
+
+### Functionality
+
 - DataFrame Operations
-  - [x] Read CSV into dataframe
+  <!-- - [x] Read CSV into dataframe -->
   - [X] Select single column
   - [ ] Select subset of columns, drop columns
   - [X] Add or remove columns
@@ -67,4 +87,4 @@ One can think of this library partly as a playground for features that could for
 
 ## Performance
 
-We plan on providing simple benchmarks in the near future, especially after we gain the ability to save dataframes to disk.
+We plan on providing simple benchmarks in the near future, especially after we gain the ability to save dataframes to disk. Specifically, after we implement CSV and JSON writers.
