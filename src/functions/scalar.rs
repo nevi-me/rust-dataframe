@@ -1,5 +1,5 @@
 use arrow::array::*;
-use arrow::array_ops;
+use arrow::compute;
 use arrow::builder::*;
 use arrow::datatypes::*;
 use arrow::error::ArrowError;
@@ -29,7 +29,7 @@ impl ScalarFunctions {
     {
         left.iter()
             .zip(right.iter())
-            .map(|(a, b)| array_ops::add(a, b).into())
+            .map(|(a, b)| compute::add(a, b).into())
             .collect()
     }
     /// Subtract two columns of `PrimitiveArray` type together
@@ -47,7 +47,7 @@ impl ScalarFunctions {
     {
         left.iter()
             .zip(right.iter())
-            .map(|(a, b)| array_ops::subtract(a, b).into())
+            .map(|(a, b)| compute::subtract(a, b).into())
             .collect()
     }
     pub fn divide<T>(
@@ -64,7 +64,7 @@ impl ScalarFunctions {
     {
         left.iter()
             .zip(right.iter())
-            .map(|(a, b)| array_ops::divide(a, b).into())
+            .map(|(a, b)| compute::divide(a, b).into())
             .collect()
     }
     pub fn multiply<T>(
@@ -81,7 +81,7 @@ impl ScalarFunctions {
     {
         left.iter()
             .zip(right.iter())
-            .map(|(a, b)| array_ops::multiply(a, b).into())
+            .map(|(a, b)| compute::multiply(a, b).into())
             .collect()
     }
 

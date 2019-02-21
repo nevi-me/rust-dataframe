@@ -99,7 +99,8 @@ fn get_fbs_type(dtype: DataType) -> fbs::Type {
         Float32 => FLOAT,
         Float64 => DOUBLE,
         Timestamp(_) => TIMESTAMP,
-        Date(_) => DATE,
+        Date32(_) => DATE,
+        Date64(_) => DATE,
         Time32(_) | Time64(_) => TIME,
         Interval(_) => unimplemented!("Interval type not supported"),
         Utf8 => UTF8,
@@ -546,7 +547,8 @@ impl FeatherWriter for RecordBatch {
                     ));
                 }
                 DataType::Timestamp(_)
-                | DataType::Date(_)
+                | DataType::Date32(_)
+                | DataType::Date64(_)
                 | DataType::Time32(_)
                 | DataType::Time64(_)
                 | DataType::Interval(_) => {

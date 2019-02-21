@@ -51,10 +51,12 @@ impl ArrayFunctions {
             } else {
                 let values = array.values();
                 let values = values.as_any().downcast_ref::<PrimitiveArray<T>>().unwrap();
-                let values = values.value_slice(
-                    array.value_offset(i) as usize,
-                    array.value_length(i) as usize,
-                ).to_vec();
+                let values = values
+                    .value_slice(
+                        array.value_offset(i) as usize,
+                        array.value_length(i) as usize,
+                    )
+                    .to_vec();
                 let u = values.unique();
                 // TODO check how nulls are treated here
                 u.iter().for_each(|x| b.values().append_value(*x).unwrap());
@@ -62,14 +64,16 @@ impl ArrayFunctions {
         }
         Ok(b.finish())
     }
-    pub fn array_except<T>(a: &ListArray, b: &ListArray) -> Result<ListArray, ArrowError> 
+    pub fn array_except<T>(a: &ListArray, b: &ListArray) -> Result<ListArray, ArrowError>
     where
         T: ArrowPrimitiveType + ArrowNumericType,
         T::Native: std::cmp::PartialEq<T::Native> + std::cmp::Ord,
     {
         // check that lengths of both arrays are equal
         if a.len() != b.len() {
-            return Err(ArrowError::ComputeError("Expected array a and b to have the same length".to_string()))
+            return Err(ArrowError::ComputeError(
+                "Expected array a and b to have the same length".to_string(),
+            ));
         }
         let values_builder: PrimitiveBuilder<T> = PrimitiveBuilder::new(a.values().len());
         let mut c = ListBuilder::new(values_builder);
@@ -80,17 +84,21 @@ impl ArrayFunctions {
                 c.append(true)?
             } else {
                 let a_values = a.values();
-                let a_values = a_values.as_any().downcast_ref::<PrimitiveArray<T>>().unwrap();
-                let a_values = a_values.value_slice(
-                    a.value_offset(i) as usize,
-                    a.value_length(i) as usize,
-                ).to_vec();
+                let a_values = a_values
+                    .as_any()
+                    .downcast_ref::<PrimitiveArray<T>>()
+                    .unwrap();
+                let a_values = a_values
+                    .value_slice(a.value_offset(i) as usize, a.value_length(i) as usize)
+                    .to_vec();
                 let b_values = b.values();
-                let b_values = b_values.as_any().downcast_ref::<PrimitiveArray<T>>().unwrap();
-                let b_values = b_values.value_slice(
-                    b.value_offset(i) as usize,
-                    b.value_length(i) as usize,
-                ).to_vec();
+                let b_values = b_values
+                    .as_any()
+                    .downcast_ref::<PrimitiveArray<T>>()
+                    .unwrap();
+                let b_values = b_values
+                    .value_slice(b.value_offset(i) as usize, b.value_length(i) as usize)
+                    .to_vec();
 
                 let u = a_values.uniq(b_values);
                 // TODO check how nulls are treated here
@@ -100,14 +108,16 @@ impl ArrayFunctions {
         }
         Ok(c.finish())
     }
-    pub fn array_intersect<T>(a: &ListArray, b: &ListArray) -> Result<ListArray, ArrowError> 
+    pub fn array_intersect<T>(a: &ListArray, b: &ListArray) -> Result<ListArray, ArrowError>
     where
         T: ArrowPrimitiveType + ArrowNumericType,
         T::Native: std::cmp::PartialEq<T::Native> + std::cmp::Ord,
     {
         // check that lengths of both arrays are equal
         if a.len() != b.len() {
-            return Err(ArrowError::ComputeError("Expected array a and b to have the same length".to_string()))
+            return Err(ArrowError::ComputeError(
+                "Expected array a and b to have the same length".to_string(),
+            ));
         }
         let values_builder: PrimitiveBuilder<T> = PrimitiveBuilder::new(a.values().len());
         let mut c = ListBuilder::new(values_builder);
@@ -118,17 +128,21 @@ impl ArrayFunctions {
                 c.append(true)?
             } else {
                 let a_values = a.values();
-                let a_values = a_values.as_any().downcast_ref::<PrimitiveArray<T>>().unwrap();
-                let a_values = a_values.value_slice(
-                    a.value_offset(i) as usize,
-                    a.value_length(i) as usize,
-                ).to_vec();
+                let a_values = a_values
+                    .as_any()
+                    .downcast_ref::<PrimitiveArray<T>>()
+                    .unwrap();
+                let a_values = a_values
+                    .value_slice(a.value_offset(i) as usize, a.value_length(i) as usize)
+                    .to_vec();
                 let b_values = b.values();
-                let b_values = b_values.as_any().downcast_ref::<PrimitiveArray<T>>().unwrap();
-                let b_values = b_values.value_slice(
-                    b.value_offset(i) as usize,
-                    b.value_length(i) as usize,
-                ).to_vec();
+                let b_values = b_values
+                    .as_any()
+                    .downcast_ref::<PrimitiveArray<T>>()
+                    .unwrap();
+                let b_values = b_values
+                    .value_slice(b.value_offset(i) as usize, b.value_length(i) as usize)
+                    .to_vec();
 
                 let u = a_values.intersect(b_values);
                 // TODO check how nulls are treated here
@@ -250,7 +264,7 @@ impl ArrayFunctions {
     }
 
     /// TODO: extract repetitive code and share with other array fns that use `array_tool` crate
-    pub fn array_repeat<T>(array: &ListArray, count: i32) -> Result<ListArray, ArrowError> 
+    pub fn array_repeat<T>(array: &ListArray, count: i32) -> Result<ListArray, ArrowError>
     where
         T: ArrowPrimitiveType + ArrowNumericType,
         T::Native: std::cmp::PartialEq<T::Native> + std::cmp::Ord,
@@ -265,10 +279,12 @@ impl ArrayFunctions {
             } else {
                 let values = array.values();
                 let values = values.as_any().downcast_ref::<PrimitiveArray<T>>().unwrap();
-                let values = values.value_slice(
-                    array.value_offset(i) as usize,
-                    array.value_length(i) as usize,
-                ).to_vec();
+                let values = values
+                    .value_slice(
+                        array.value_offset(i) as usize,
+                        array.value_length(i) as usize,
+                    )
+                    .to_vec();
 
                 let u = values.times(count);
                 // TODO check how nulls are treated here
@@ -279,8 +295,8 @@ impl ArrayFunctions {
         Ok(c.finish())
     }
 
-    /// Sorts the input array in ascending order. 
-    /// 
+    /// Sorts the input array in ascending order.
+    ///
     /// TODO: document null treatment, and make it behave like Spark does.
     fn array_sort<T>(array: &ListArray) -> Result<ListArray, ArrowError>
     where
@@ -310,14 +326,16 @@ impl ArrayFunctions {
         }
         Ok(b.finish())
     }
-    pub fn array_union<T>(a: &ListArray, b: &ListArray) -> Result<ListArray, ArrowError> 
+    pub fn array_union<T>(a: &ListArray, b: &ListArray) -> Result<ListArray, ArrowError>
     where
         T: ArrowPrimitiveType + ArrowNumericType,
         T::Native: std::cmp::PartialEq<T::Native> + std::cmp::Ord,
     {
         // check that lengths of both arrays are equal
         if a.len() != b.len() {
-            return Err(ArrowError::ComputeError("Expected array a and b to have the same length".to_string()))
+            return Err(ArrowError::ComputeError(
+                "Expected array a and b to have the same length".to_string(),
+            ));
         }
         let values_builder: PrimitiveBuilder<T> = PrimitiveBuilder::new(a.values().len());
         let mut c = ListBuilder::new(values_builder);
@@ -328,17 +346,21 @@ impl ArrayFunctions {
                 c.append(true)?
             } else {
                 let a_values = a.values();
-                let a_values = a_values.as_any().downcast_ref::<PrimitiveArray<T>>().unwrap();
-                let a_values = a_values.value_slice(
-                    a.value_offset(i) as usize,
-                    a.value_length(i) as usize,
-                ).to_vec();
+                let a_values = a_values
+                    .as_any()
+                    .downcast_ref::<PrimitiveArray<T>>()
+                    .unwrap();
+                let a_values = a_values
+                    .value_slice(a.value_offset(i) as usize, a.value_length(i) as usize)
+                    .to_vec();
                 let b_values = b.values();
-                let b_values = b_values.as_any().downcast_ref::<PrimitiveArray<T>>().unwrap();
-                let b_values = b_values.value_slice(
-                    b.value_offset(i) as usize,
-                    b.value_length(i) as usize,
-                ).to_vec();
+                let b_values = b_values
+                    .as_any()
+                    .downcast_ref::<PrimitiveArray<T>>()
+                    .unwrap();
+                let b_values = b_values
+                    .value_slice(b.value_offset(i) as usize, b.value_length(i) as usize)
+                    .to_vec();
 
                 let u = a_values.union(b_values);
                 // TODO check how nulls are treated here
@@ -370,6 +392,7 @@ mod tests {
     use arrow::array_data::*;
     use arrow::buffer::Buffer;
     use arrow::datatypes::*;
+    use std::sync::Arc;
 
     #[test]
     fn test_array_contains_i32s() {
@@ -500,7 +523,10 @@ mod tests {
 
         let b = ArrayFunctions::array_remove::<Int64Type>(&list_array, 2).unwrap();
         let values = b.values();
-        let values = values.as_any().downcast_ref::<PrimitiveArray<Int64Type>>().unwrap();
+        let values = values
+            .as_any()
+            .downcast_ref::<PrimitiveArray<Int64Type>>()
+            .unwrap();
 
         assert_eq!(6, b.len());
         assert_eq!(13, values.len());
@@ -531,7 +557,10 @@ mod tests {
 
         let b = ArrayFunctions::array_sort::<Int64Type>(&list_array).unwrap();
         let values = b.values();
-        let values = values.as_any().downcast_ref::<PrimitiveArray<Int64Type>>().unwrap();
+        let values = values
+            .as_any()
+            .downcast_ref::<PrimitiveArray<Int64Type>>()
+            .unwrap();
 
         assert_eq!(6, b.len());
         assert_eq!(16, values.len());
@@ -544,14 +573,54 @@ mod tests {
 
         let expected = Int64Array::from(vec![0, 0, 0, 1, 1, 2, 3, 4, 1, 2, 3, 5, 2, 3, 3, 8]);
         for i in 0..b.len() {
-            let x = values.value_slice(
-                b.value_offset(i) as usize,
-                b.value_length(i) as usize
-            );
-            let d = expected.value_slice(
-                b.value_offset(i) as usize,
-                b.value_length(i) as usize
-            );
+            let x = values.value_slice(b.value_offset(i) as usize, b.value_length(i) as usize);
+            let d = expected.value_slice(b.value_offset(i) as usize, b.value_length(i) as usize);
+            assert_eq!(x, d);
+        }
+    }
+
+    #[test]
+    fn test_array_union() {
+        // Construct a value array
+        let value_data =
+            Int64Array::from(vec![0, 0, 0, 1, 2, 1, 3, 4, 5, 1, 3, 2, 3, 2, 8, 3]).data();
+
+        let value_offsets = Buffer::from(&[0, 3, 6, 8, 12, 14, 16].to_byte_slice());
+
+        let value_data =
+            Int64Array::from(vec![0, 0, 0, 1, 2, 1, 3, 4, 5, 1, 3, 2, 3, 2, 8, 3]).data();
+
+        let value_offsets = Buffer::from(&[0, 3, 6, 8, 12, 14, 16].to_byte_slice());
+
+        // Construct a list array from the above two
+        let list_data_type = DataType::List(Box::new(DataType::Int64));
+        let list_data = ArrayData::builder(list_data_type.clone())
+            .len(6)
+            .add_buffer(value_offsets.clone())
+            .add_child_data(value_data.clone())
+            .build();
+        let list_array = ListArray::from(list_data);
+
+        let b = ArrayFunctions::array_sort::<Int64Type>(&list_array).unwrap();
+        let values = b.values();
+        let values = values
+            .as_any()
+            .downcast_ref::<PrimitiveArray<Int64Type>>()
+            .unwrap();
+
+        assert_eq!(6, b.len());
+        assert_eq!(16, values.len());
+        assert_eq!(0, b.value_offset(0));
+        assert_eq!(3, b.value_offset(1));
+        assert_eq!(6, b.value_offset(2));
+        assert_eq!(8, b.value_offset(3));
+        assert_eq!(12, b.value_offset(4));
+        assert_eq!(14, b.value_offset(5));
+
+        let expected = Int64Array::from(vec![0, 0, 0, 1, 1, 2, 3, 4, 1, 2, 3, 5, 2, 3, 3, 8]);
+        for i in 0..b.len() {
+            let x = values.value_slice(b.value_offset(i) as usize, b.value_length(i) as usize);
+            let d = expected.value_slice(b.value_offset(i) as usize, b.value_length(i) as usize);
             assert_eq!(x, d);
         }
     }

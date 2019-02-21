@@ -1,6 +1,6 @@
 use arrow::array::Array;
 use arrow::array::{Int64Array, PrimitiveArray};
-use arrow::array_ops;
+use arrow::compute;
 use arrow::datatypes::ArrowNumericType;
 use arrow::datatypes::ArrowPrimitiveType;
 use arrow::datatypes::Int64Type;
@@ -16,7 +16,7 @@ impl AggregateFunctions {
     {
         arrays
             .iter()
-            .map(|array| array_ops::max(array).unwrap())
+            .map(|array| compute::max(array).unwrap())
             .max()
     }
     pub fn min<T>(arrays: Vec<&PrimitiveArray<T>>) -> Option<T::Native>
@@ -26,14 +26,14 @@ impl AggregateFunctions {
     {
         arrays
             .iter()
-            .map(|array| array_ops::max(array).unwrap())
+            .map(|array| compute::max(array).unwrap())
             .max()
     }
     // pub fn avg<T>(array: &PrimitiveArray<T>) -> Option<f64>
     // where
     //     T: ArrowNumericType
     // {
-    //     let sum = array_ops::sum(array);
+    //     let sum = compute::sum(array);
     //     match sum {
     //         None => None,
     //         Some(sum) => {
@@ -67,7 +67,7 @@ impl AggregateFunctions {
         let mut sum = T::default_value();
         arrays
             .iter()
-            .for_each(|array| sum = sum + array_ops::sum(array).unwrap_or(T::default_value()));
+            .for_each(|array| sum = sum + compute::sum(array).unwrap_or(T::default_value()));
 
         Some(sum)
     }
