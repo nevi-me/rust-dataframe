@@ -5,6 +5,7 @@ use arrow::builder::*;
 use arrow::datatypes::*;
 use arrow::record_batch::RecordBatch;
 
+#[derive(Clone)]
 pub struct ChunkedArray {
     chunks: Vec<Arc<Array>>,
     num_rows: usize,
@@ -126,6 +127,7 @@ column_to_arrays!(column_to_arrays_str, BinaryArray);
 // }
 
 /// A column data structure consisting of a `Field` and `ChunkedArray`
+#[derive(Clone)]
 pub struct Column {
     pub(crate) data: ChunkedArray,
     field: arrow::datatypes::Field,
