@@ -17,49 +17,11 @@ use std::sync::Arc;
 
 use crate::error::DataFrameError;
 
-//impl From<&ArrayRef> for &PrimitiveArray<BooleanType> {
-//    fn from(array: &ArrayRef) -> Self {
-//        array.as_any().downcast_ref::<BooleanArray>().unwrap()
-//    }
-//}
-
-//impl<T: ArrowPrimitiveType> From<&Array> for &PrimitiveArray<T> {
-//    fn from(array: &Array) -> Self {
-//        match array.data_type() {
-//            DataType::Boolean => array.as_any().downcast_ref::<T>().unwrap()
-//        }
-////        _ => unimplemented!("Casting array to other primitive types is not implemented")
-//    }
-//}
-
-//fn array_to_primitive<T>(array: &Array) -> &PrimitiveArray<T>
-//    where
-//        T: ArrowPrimitiveType,
-//{
-//    match array.data_type() {
-//        DataType::Boolean => {
-//            array.as_any().downcast_ref::<BooleanArray>().unwrap()
-//        }
-//        _ => unimplemented!("Casting for other array types is not implemented")
-//    }
-//}
-
 pub struct DataFrame {
     schema: Arc<Schema>,
     columns: Vec<Column>,
 }
 
-// struct CsvDataSource {
-//     reader: CsvReader,
-// }
-
-// impl Iterator for CsvDataSource {
-//    type Item = Result<RecordBatch, DataFrameError>;
-
-//    fn next(&mut self) -> Result<Option<Self::Item>, arrow::error::ArrowError> {
-//        Some(Ok(self.reader.next()))
-//    }
-// }
 
 impl DataFrame {
     /// Create an empty `DataFrame`
@@ -213,100 +175,96 @@ impl DataFrame {
     /// Returns dataframe with specified columns selected.
     ///
     /// If a column name does not exist, it is omitted.
-    // pub fn select(&mut self, col_names: Vec<&str>) -> Self {
-    //     // get the names of columns from the schema, and match them with supplied
-    //     let mut col_num: i16 = -1;
-    //     let schema = &self.schema.clone();
-    //     let field_names: Vec<(usize, &str)> = schema
-    //         .fields()
-    //         .iter()
-    //         .map(|c| {
-    //             col_num += 1;
-    //             (col_num as usize, c.name().as_str())
-    //         })
-    //         .collect();
+    pub fn select(&mut self, col_names: Vec<&str>) -> Self {
+        // get the names of columns from the schema, and match them with supplied
+        let mut col_num: i16 = -1;
+        let schema = &self.schema.clone();
+        let field_names: Vec<(usize, &str)> = schema
+            .fields()
+            .iter()
+            .map(|c| {
+                col_num += 1;
+                (col_num as usize, c.name().as_str())
+            })
+            .collect();
 
-    //     // filter names
-    //     let filter_cols: Vec<(usize, &str)> = if col_names.contains(&"*") {
-    //         field_names
-    //     } else {
-    //         // TODO follow the order of user-supplied column names
-    //         field_names
-    //             .into_iter()
-    //             .filter(|(col, name)| col_names.contains(name))
-    //             .collect()
-    //     };
+        // filter names
+        let filter_cols: Vec<(usize, &str)> = if col_names.contains(&"*") {
+            field_names
+        } else {
+            // TODO follow the order of user-supplied column names
+            field_names
+                .into_iter()
+                .filter(|(col, name)| col_names.contains(name))
+                .collect()
+        };
 
-    //     // let columns = filter_cols.clone().iter().map(move |c| self.columns[c.0]).collect();
+        let mut columns = vec![];
 
-    //     let mut columns = vec![];
+        for (i, u) in filter_cols.clone() {
+            let c = &self.columns[i];
+            columns.push(c.clone());
+        }
 
-    //     for (i,u) in filter_cols.clone() {
-    //         let c = &self.columns[i];
-    //         columns.push(c);
-    //     }
+        let new_schema = Arc::new(Schema::new(
+            filter_cols
+                .iter()
+                .map(|c| schema.field(c.0).clone())
+                .collect(),
+        ));
 
-    //     let new_schema = Arc::new(Schema::new(
-    //         filter_cols
-    //             .iter()
-    //             .map(|c| schema.field(c.0).clone())
-    //             .collect(),
-    //     ));
-
-    //     dbg!(filter_cols);
-
-    //     DataFrame::from_columns(new_schema, columns)
-    // }
+        DataFrame::from_columns(new_schema, columns)
+    }
 
     /// Returns a dataframe with specified columns dropped.
     ///
     /// If a column name does not exist, it is omitted.
-    // pub fn drop(&self, col_names: Vec<&str>) -> Self {
-    //     // get the names of columns from the schema, and match them with supplied
-    //     let mut col_num: i16 = -1;
-    //     let schema = self.schema.clone();
-    //     let field_names: Vec<(usize, &str)> = schema
-    //         .fields()
-    //         .into_iter()
-    //         .map(|c| {
-    //             col_num += 1;
-    //             (col_num as usize, c.name().as_str())
-    //         })
-    //         .collect();
+    pub fn drop(&self, col_names: Vec<&str>) -> Self {
+        // get the names of columns from the schema, and match them with supplied
+        let mut col_num: i16 = -1;
+        let schema = self.schema.clone();
+        let field_names: Vec<(usize, &str)> = schema
+            .fields()
+            .into_iter()
+            .map(|c| {
+                col_num += 1;
+                (col_num as usize, c.name().as_str())
+            })
+            .collect();
 
-    //     // filter names
-    //     let filter_cols: Vec<(usize, &str)> = {
-    //         // TODO follow the order of user-supplied column names
-    //         field_names
-    //             .into_iter()
-    //             .filter(|(col, name)| !col_names.contains(name))
-    //             .collect()
-    //     };
+        // filter names
+        let filter_cols: Vec<(usize, &str)> = {
+            // TODO follow the order of user-supplied column names
+            field_names
+                .into_iter()
+                .filter(|(col, name)| !col_names.contains(name))
+                .collect()
+        };
 
-    //     // construct dataframe with selected columns
-    //     DataFrame {
-    //         schema: Arc::new(Schema::new(
-    //             filter_cols
-    //                 .iter()
-    //                 .map(|c| schema.field(c.0).clone())
-    //                 .collect(),
-    //         )),
-    //         columns: filter_cols
-    //             .into_iter()
-    //             .map(move |c| self.columns[c.0])
-    //             .collect(),
-    //     }
-    // }
+        // construct dataframe with selected columns
+        DataFrame {
+            schema: Arc::new(Schema::new(
+                filter_cols
+                    .iter()
+                    .map(|c| schema.field(c.0).clone())
+                    .collect(),
+            )),
+            columns: filter_cols
+                .iter()
+                .map(move |c| self.columns[c.0].clone())
+                .collect(),
+        }
+    }
 
     /// Create a dataframe from an Arrow Table.
     ///
     /// Arrow Tables are not yet in the Rust library, and we are hashing them out here
-    // pub fn from_table(table: crate::table::Table) -> Self {
-    //     DataFrame {
-    //         schema: table.schema().clone(),
-    //         columns: *table.columns(),
-    //     }
-    // }
+    pub fn from_table(table: crate::table::Table) -> Self {
+        DataFrame {
+            schema: table.schema().clone(),
+            columns: table.columns().to_vec(),
+        }
+    }
 
     pub fn from_csv(path: &str, schema: Option<Arc<Schema>>) -> Self {
         let file = File::open(path).unwrap();

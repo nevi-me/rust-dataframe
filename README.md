@@ -39,7 +39,7 @@ To that end, we're trying to support CSV, JSON, and perhaps other simpler file f
 - IO Support
   - [ ] CSV
     - [X] Read
-    - [ ] Write
+    - [X] Write
   - [ ] JSON
     - [X] Read (submitted to Arrow)
     - [ ] Write
@@ -52,11 +52,11 @@ To that end, we're trying to support CSV, JSON, and perhaps other simpler file f
 - DataFrame Operations
   <!-- - [x] Read CSV into dataframe -->
   - [X] Select single column
-  - [ ] Select subset of columns, drop columns
+  - [X] Select subset of columns, drop columns
   - [X] Add or remove columns
   - [X] Rename columns
   - [ ] Create dataframe from record batches (a `Vec<RecordBatch>` as well as an iterator)
-  - [ ] Write dataframe to CSV (and other formats as and when Arrow supports them)
+  - [X] Write dataframe to CSV (and other formats as and when Arrow supports them)
   - [ ] Sort dataframes
   - [ ] Grouped operations
   - [ ] Filter dataframes
