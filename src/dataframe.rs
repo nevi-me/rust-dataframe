@@ -428,6 +428,21 @@ impl DataFrame {
         Ok(())
     }
 
+    pub fn to_csv(&self, path: &str) -> Result<(), arrow::error::ArrowError> {
+        // use csv::error::Error;
+        use arrow::csv::Writer;
+
+        let file = File::create(path)?;
+
+        let wrt = Writer::new(file);
+
+        let batches = self.to_record_batches();
+        let batches_ref: Vec<&RecordBatch> = batches.iter().map(|b| b).collect();
+
+        wrt.write(batches_ref)?;
+
+        Ok(())
+    }
 }
 
 mod tests {
@@ -534,6 +549,39 @@ mod tests {
         );
 
         let write = dataframe.to_feather("./test/data/uk_cities");
+        assert!(write.is_ok());
+    }
+
+    #[test]
+    fn csv_io() {
+        let mut dataframe = DataFrame::from_csv("./test/data/uk_cities_with_headers.csv", None);
+        let a = dataframe.column_by_name("lat");
+        let b = dataframe.column_by_name("lng");
+        let sum = ScalarFunctions::add(column_to_arrays_f64(a), column_to_arrays_f64(b));
+        // TODO, make this better
+        let sum: Vec<ArrayRef> = sum
+            .unwrap()
+            .into_iter()
+            .map(|p| Arc::new(p) as ArrayRef)
+            .collect();
+        dataframe = dataframe.with_column(
+            "lat_lng_sum",
+            Column::from_arrays(sum, Field::new("lat_lng_sum", DataType::Float64, true)),
+        );
+
+        let city = dataframe.column_by_name("city");
+        let lowercase = ScalarFunctions::lower(column_to_arrays_str(city));
+        let lowercase: Vec<ArrayRef> = lowercase
+            .unwrap()
+            .into_iter()
+            .map(|p| Arc::new(p) as ArrayRef)
+            .collect();
+        dataframe = dataframe.with_column(
+            "city_lower",
+            Column::from_arrays(lowercase, Field::new("city_lower", DataType::Utf8, true)),
+        );
+
+        let write = dataframe.to_csv("/tmp/uk_cities_out.csv");
         assert!(write.is_ok());
     }
 }

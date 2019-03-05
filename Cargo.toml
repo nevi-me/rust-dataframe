@@ -5,7 +5,7 @@ authors = ["Neville Dipale <nevilledips@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-arrow = { git = "https://github.com/nevi-me/arrow", branch="arrow-4386"}
+arrow = { git = "https://github.com/nevi-me/arrow", rev = "cb38e68"}
 # arrow = { path = "../../arrow/rust/arrow"}
 num = "0.2"
 num-traits = "0.2"
