@@ -135,7 +135,8 @@ impl DataFrame {
 
         arrays.into_iter().for_each(|array| {
             dbg!(array.len());
-            batches.push(RecordBatch::new(self.schema.clone(), array));
+            // the unwrap is infallible as we're passing data that's already been verified
+            batches.push(RecordBatch::try_new(self.schema.clone(), array).unwrap());
         });
 
         batches
