@@ -22,7 +22,6 @@ pub struct DataFrame {
     columns: Vec<Column>,
 }
 
-
 impl DataFrame {
     /// Create an empty `DataFrame`
     fn empty() -> Self {
@@ -143,31 +142,16 @@ impl DataFrame {
     }
 
     /// Returns dataframe with the first n records selected
-    ///
-    /// TODO: this should work through batches, and slice the last one that makes
-    /// the length match what we're taking.
-    // fn take(&self, count: usize) -> Self {
-    //     DataFrame::new(
-    //         self.schema.clone(),
-    //         self.columns
-    //             .into_iter()
-    //             .map(|col| {
-    //                 ArrayDataBuilder::new(col.data_type().clone())
-    //                     .child_data(
-    //                         col.data()
-    //                             .child_data()
-    //                             .iter()
-    //                             .take(count)
-    //                             .into_iter()
-    //                             .map(|x| x.clone())
-    //                             .collect(),
-    //                     )
-    //                     .build()
-    //             })
-    //             .map(|col| utils::make_array(col))
-    //             .collect(),
-    //     )
-    // }
+    fn take(&self, count: usize) -> Self {
+        DataFrame::new(
+            self.schema.clone(),
+            self.columns
+                .clone()
+                .into_iter()
+                .map(|col| col.slice(0, Some(count)))
+                .collect(),
+        )
+    }
 
     fn intersect(&self, other: &DataFrame) -> Self {
         unimplemented!("Intersect not yet implemented")

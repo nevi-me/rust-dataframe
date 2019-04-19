@@ -10,7 +10,6 @@ pub struct ChunkedArray {
     chunks: Vec<Arc<Array>>,
     num_rows: usize,
     null_count: usize,
-    // TODO: Go has data_type, is it worth storing, or getting from the first chunk?
 }
 
 impl ChunkedArray {
@@ -40,7 +39,7 @@ impl ChunkedArray {
         self.num_rows
     }
 
-    fn null_count(&self) -> usize {
+    pub fn null_count(&self) -> usize {
         self.null_count
     }
 
@@ -63,29 +62,24 @@ impl ChunkedArray {
     /// The `offset` is the position of the first element in the constructed slice.
     /// `length` is the length of the slice. If there are not enough elements in the chunked array,
     /// the length will be adjusted accordingly.
-    ///
-    /// TODO: I've made length optional because CPP has 2 `slice` methods, with one being a slice
-    /// to the end of the array.
-    ///
-    /// TODO: This relies on my version of slice, which I'm still implementing.
-    // fn slice(&self, offset: usize, length: Option<usize>) -> Self {
-    //     // unimplemented!("TODO: I need help here, this has to be a zero-copy slice among slices")
-    //     let mut offset = offset;
-    //     let mut length = length.unwrap_or(std::usize::MAX);
-    //     let mut current_chunk: usize = 0;
-    //     let mut new_chunks: Vec<ArrayRef> = vec![];
-    //     while current_chunk < self.num_chunks() && offset >= self.chunk(current_chunk).len() {
-    //         offset -= self.chunk(current_chunk).len();
-    //         current_chunk += 1;
-    //     }
-    //     while current_chunk < self.num_chunks() && length > 0 {
-    //         new_chunks.push(self.chunk(current_chunk).slice(offset, length));
-    //         length -= self.chunk(current_chunk).len() - offset;
-    //         offset = 0;
-    //         current_chunk += 1;
-    //     }
-    //     Self::from_arrays(new_chunks)
-    // }
+    fn slice(&self, offset: usize, length: Option<usize>) -> Self {
+        let mut offset = offset;
+        let mut length = length.unwrap_or(std::usize::MAX);
+        let mut current_chunk: usize = 0;
+        let mut new_chunks: Vec<ArrayRef> = vec![];
+        // compute the first offset. If offset > whole chunks' lengths, skip those chunks
+        while current_chunk < self.num_chunks() && offset >= self.chunk(current_chunk).len() {
+            offset -= self.chunk(current_chunk).len();
+            current_chunk += 1;
+        }
+        while current_chunk < self.num_chunks() && length > 0 {
+            new_chunks.push(self.chunk(current_chunk).slice(offset, length));
+            length -= self.chunk(current_chunk).len() - offset;
+            offset = 0;
+            current_chunk += 1;
+        }
+        Self::from_arrays(new_chunks)
+    }
 
     fn flatten(&self) {
         unimplemented!("This is for flattening struct columns, we aren't yet there")
@@ -165,8 +159,17 @@ impl Column {
         &self.field
     }
 
-    /// TODO: slice seems the same as that of `ChunkedArray`
-    // fn slice(&self, offset: usize, length: usize) -> Self {}
+    pub fn slice(&self, offset: usize, length: Option<usize>) -> Self {
+        Self::from_chunked_array(self.data().slice(offset, length), self.field().clone())
+    }
+
+    pub fn null_count(&self) -> usize {
+        self.data().null_count()
+    }
+
+    pub fn num_rows(&self) -> usize {
+        self.data().num_rows()
+    }
 
     fn flatten() {}
 }
@@ -178,23 +181,23 @@ pub struct Table {
 }
 
 impl Table {
-    // pub fn new(schema: Arc<Schema>, columns: Vec<Column>) -> Self {
-    //     // assert that there are some columns
-    //     assert!(
-    //         columns.len() > 0,
-    //         "at least one column must be defined to create a record batch"
-    //     );
-    //     // assert that all columns have the same row count
-    //     let len = columns[0].data().len();
-    //     for i in 1..columns.len() {
-    //         assert_eq!(
-    //             len,
-    //             columns[i].len(),
-    //             "all columns in a record batch must have the same length"
-    //         );
-    //     }
-    //     Table { schema, columns }
-    // }
+    pub fn new(schema: Arc<Schema>, columns: Vec<Column>) -> Self {
+        // assert that there are some columns
+        assert!(
+            columns.len() > 0,
+            "at least one column must be defined to create a record batch"
+        );
+        // assert that all columns have the same row count
+        let len = columns[0].data().num_rows();
+        for i in 1..columns.len() {
+            assert_eq!(
+                len,
+                columns[i].data().num_rows(),
+                "all columns in a record batch must have the same length"
+            );
+        }
+        Table { schema, columns }
+    }
 
     pub fn schema(&self) -> &Arc<Schema> {
         &self.schema
@@ -249,6 +252,19 @@ impl Table {
     fn make_with_schema(schema: Arc<Schema>, columns: Vec<Column>) -> Self {
         // TODO validate that schema and columns match
         Table { schema, columns }
+    }
+
+    /// Slice the table from an offset
+    pub fn slice(&self, offset: usize, limit: usize) -> Self {
+        Table {
+            schema: self.schema.clone(),
+            columns: self
+                .columns
+                .clone()
+                .into_iter()
+                .map(|col| col.slice(offset, Some(limit)))
+                .collect(),
+        }
     }
 
     /// Construct a `Table` from a sequence of Arrow `RecordBatch`es.
