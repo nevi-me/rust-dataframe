@@ -46,6 +46,16 @@ To that end, we're trying to support CSV, JSON, and perhaps other simpler file f
   - [ ] Feather
     - [X] Read
     - [X] Write (**do not use**, the current limitation with slicing arrays means we write each record batch as a file, instead of a single file for all the data)
+  - [ ] Arrow IPC
+    - [ ] Read File
+    - [ ] Write FIle
+  - [ ] SQL
+    - [ ] PostgreSQL
+      - [X] Read (ongoing, reading of most columns possible)
+      - [ ] Write
+    - [ ] MSSQL (using tiberius)
+      - [ ] Read
+      - [ ] Write
 
 ### Functionality
 
