@@ -37,9 +37,9 @@ To that end, we're trying to support CSV, JSON, and perhaps other simpler file f
 **Note on Feather:** The Feather file format support can be considered as deprecated in favour of Arrow IPC. Though we have implemented Feather, it's meant to be a stop-gap measure until Arrow supports IPC (in Rust). We'll try tackle this in the coming months.
 
 - IO Support
-  - [ ] CSV
+  - [X] CSV (using Arrow)
     - [X] Read
-    - [ ] Write
+    - [X] Write
   - [ ] JSON
     - [X] Read (submitted to Arrow)
     - [ ] Write
@@ -50,13 +50,11 @@ To that end, we're trying to support CSV, JSON, and perhaps other simpler file f
 ### Functionality
 
 - DataFrame Operations
-  <!-- - [x] Read CSV into dataframe -->
   - [X] Select single column
-  - [ ] Select subset of columns, drop columns
+  - [X] Select subset of columns, drop columns
   - [X] Add or remove columns
   - [X] Rename columns
   - [ ] Create dataframe from record batches (a `Vec<RecordBatch>` as well as an iterator)
-  - [ ] Write dataframe to CSV (and other formats as and when Arrow supports them)
   - [ ] Sort dataframes
   - [ ] Grouped operations
   - [ ] Filter dataframes

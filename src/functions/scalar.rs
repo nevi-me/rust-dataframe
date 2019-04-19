@@ -247,7 +247,16 @@ impl ScalarFunctions {
     pub fn greatest() {}
     pub fn hash() {}
     pub fn hex() {}
-    pub fn hour() {}
+    pub fn hour<T>(array: Vec<&PrimitiveArray<T>>) -> Result<Vec<Int32Array>, ArrowError>
+    where
+        T: ArrowNumericType + ArrowTemporalType,
+        i64: std::convert::From<T::Native>
+    {
+        array
+            .iter()
+            .map(|a| compute::hour(a))
+            .collect()
+    }
     pub fn hypot<T>(
         a: &PrimitiveArray<T>,
         b: &PrimitiveArray<T>,

@@ -386,7 +386,7 @@ impl<R: Read + Seek> FeatherReader<R> {
             };
         }
 
-        Ok(RecordBatch::new(Arc::new(Schema::new(fields)), arrays))
+        Ok(RecordBatch::try_new(Arc::new(Schema::new(fields)), arrays)?)
     }
 }
 
