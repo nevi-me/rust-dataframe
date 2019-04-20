@@ -15,3 +15,6 @@ flatbuffers = "0.5"
 array_tool = "1"
 postgres = {version = "0.16.0-rc.1", features = ["default", "with-chrono-0_4", "with-uuid-0_7"]}
 chrono = "0.4"
+# for lazy evaluation
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0", features = ["preserve_order"] }

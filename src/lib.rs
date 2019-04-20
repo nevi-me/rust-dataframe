@@ -6,7 +6,10 @@
 
 pub mod dataframe;
 pub mod error;
+pub mod evaluation;
+pub mod expression;
 pub mod functions;
 pub mod io;
+pub mod operation;
 pub mod table;
 pub mod utils;
