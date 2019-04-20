@@ -7,6 +7,9 @@ use chrono::Timelike;
 use postgres::types::*;
 use postgres::{Client, NoTls, Row};
 
+/// Convert Postgres Type to Arrow DataType
+///
+/// Not all types are covered, but can be easily added
 fn pg_to_arrow_type(dt: &Type) -> Option<DataType> {
     match dt {
         &Type::BOOL => Some(DataType::Boolean),
@@ -60,24 +63,6 @@ fn pg_to_arrow_type(dt: &Type) -> Option<DataType> {
     }
 }
 
-fn from_field(f: &Field, capacity: usize) -> Box<ArrayBuilder> {
-    match f.data_type() {
-        DataType::Boolean => Box::new(BooleanBuilder::new(capacity)),
-        DataType::Int8 => Box::new(Int8Builder::new(capacity)),
-        DataType::Int16 => Box::new(Int16Builder::new(capacity)),
-        DataType::Int32 => Box::new(Int32Builder::new(capacity)),
-        DataType::Int64 => Box::new(Int64Builder::new(capacity)),
-        DataType::UInt8 => Box::new(UInt8Builder::new(capacity)),
-        DataType::UInt16 => Box::new(UInt16Builder::new(capacity)),
-        DataType::UInt32 => Box::new(UInt32Builder::new(capacity)),
-        DataType::UInt64 => Box::new(UInt64Builder::new(capacity)),
-        DataType::Float32 => Box::new(Float32Builder::new(capacity)),
-        DataType::Float64 => Box::new(Float64Builder::new(capacity)),
-        DataType::Utf8 => Box::new(BinaryBuilder::new(capacity)),
-        t @ _ => panic!("Data type {:?} is not currently supported", t),
-    }
-}
-
 // TODO can make this a common trait for DB sources
 pub fn read_table(
     connection_string: &str,
@@ -105,14 +90,20 @@ pub fn read_table(
                     let field_builder = builder.field_builder::<Int32Builder>(j).unwrap();
                     for i in 0..chunk.len() {
                         let row: &Row = chunk.get(i).unwrap();
-                        field_builder.append_value(row.get(j)).unwrap();
+                        match row.try_get(j) {
+                            Ok(value) => field_builder.append_value(value).unwrap(),
+                            Err(_) => field_builder.append_null().unwrap(),
+                        };
                     }
                 }
                 DataType::Int64 => {
                     let field_builder = builder.field_builder::<Int64Builder>(j).unwrap();
                     for i in 0..chunk.len() {
                         let row: &Row = chunk.get(i).unwrap();
-                        field_builder.append_value(row.get(j)).unwrap();
+                        match row.try_get(j) {
+                            Ok(value) => field_builder.append_value(value).unwrap(),
+                            Err(_) => field_builder.append_null().unwrap(),
+                        };
                     }
                 }
                 DataType::Timestamp(TimeUnit::Millisecond) => {
@@ -160,13 +151,12 @@ pub fn read_table(
             }
         }
         builder.append(true).unwrap();
-        batches.push(builder.finish().flatten());
+        batches.push(RecordBatch::from(&builder.finish()));
     });
     Ok(batches)
 }
 
-fn populate_builder() {}
-
+/// Generate Arrow schema from a row
 fn row_to_schema(row: &postgres::Row) -> Result<Schema, ()> {
     let fields = row
         .columns()
