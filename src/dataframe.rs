@@ -79,6 +79,15 @@ impl DataFrame {
     /// Returns a new `DataFrame` with column appended.
     pub fn with_column(mut self, name: &str, column: Column) -> Self {
         let mut fields = self.schema.fields().clone();
+        // check if field exists, and overwrite it
+        let col = self.schema.column_with_name(name);
+        match col {
+            Some((i, field)) => {
+                self = self.drop(vec![name]);
+                fields = self.schema.fields().clone();
+            }
+            None => {}
+        }
         fields.push(Field::new(
             name,
             column.data_type().clone(),
@@ -406,6 +415,20 @@ impl DataFrame {
         wrt.write(batches_ref)?;
 
         Ok(())
+    }
+
+    /// get a column from table as column expression
+    pub fn expr_column(&self, i: usize) -> crate::expression::Column {
+        self.schema().field(i).clone().into()
+    }
+
+    pub fn expr_column_by_name(&self, name: &str) -> crate::expression::Column {
+        self.schema()
+            .column_with_name(name)
+            .unwrap()
+            .1
+            .clone()
+            .into()
     }
 }
 

@@ -10,6 +10,7 @@ use crate::table;
 use ::std::sync::Arc;
 use arrow::array::*;
 use arrow::datatypes::DataType;
+use arrow::error::ArrowError;
 
 pub trait Evaluate {
     /// Evaluate an operation against a data source
@@ -60,6 +61,14 @@ impl Evaluate for DataFrame {
                 }
                 _ => panic!("Scalar Expression {:?} not supported", expr),
             },
+            Expression::Cast => {
+                let input_col: &table::Column = columns.get(0).unwrap();
+                let input_col = self.column_by_name(input_col.name());
+                let arrays: Vec<ArrayRef> = input_col.data().chunks().iter().map(|array_ref: &ArrayRef| {
+                    arrow::compute::cast(array_ref, &DataType::from(operation.output.column_type.clone())).unwrap()
+                }).collect();
+                self.with_column(&operation.output.name, table::Column::from_arrays(arrays, operation.output.clone().into()))
+            }
             // expr @ _ => panic!("Expression {:?} not supported", expr),
         }
     }
@@ -69,7 +78,7 @@ impl Evaluate for DataFrame {
 mod tests {
     use super::*;
 
-    use crate::operation::{AddOperation, ScalarOperation};
+    use crate::operation::{AddOperation, CastOperation, ScalarOperation};
 
     #[test]
     fn test_evaluation() {
@@ -83,12 +92,28 @@ mod tests {
             column_type: ColumnType::Scalar(DataType::Float64),
         };
 
-        let add = AddOperation::transform(vec![a, b], Some("lat_lng".to_owned())).unwrap();
+        let add = AddOperation::transform(vec![a, b], Some("lat_lng".to_owned()), None).unwrap();
 
-        let out_dataframe = dataframe.evaluate(&add);
+        let mut out_dataframe = dataframe;
+        for op in add {
+            out_dataframe = out_dataframe.evaluate(&op);
+        }
+
+        // cast lat_lng to string
+        let lat_lng = out_dataframe.expr_column_by_name("lat_lng");
+        let cast = CastOperation::transform(
+            vec![lat_lng],
+            Some("lat_lng".to_owned()),
+            Some(DataType::Utf8),
+        )
+        .unwrap();
+
+        for op in cast {
+            out_dataframe = out_dataframe.evaluate(&op);
+        }
 
         assert_eq!(
-            "Schema { fields: [Field { name: \"city\", data_type: Utf8, nullable: false }, Field { name: \"lat\", data_type: Float64, nullable: false }, Field { name: \"lng\", data_type: Float64, nullable: false }, Field { name: \"lat_lng\", data_type: Float64, nullable: true }] }",
+            "Schema { fields: [Field { name: \"city\", data_type: Utf8, nullable: false }, Field { name: \"lat\", data_type: Float64, nullable: false }, Field { name: \"lng\", data_type: Float64, nullable: false }, Field { name: \"lat_lng\", data_type: Utf8, nullable: true }] }",
             format!("{:?}", out_dataframe.schema())
         );
     }

@@ -143,7 +143,7 @@ impl Column {
         }
     }
 
-    fn name(&self) -> &str {
+    pub fn name(&self) -> &str {
         self.field.name()
     }
 

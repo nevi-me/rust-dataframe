@@ -82,6 +82,7 @@ pub struct Computation {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Expression {
     Scalar(ScalarExpression),
+    Cast,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
