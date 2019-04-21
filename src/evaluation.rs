@@ -9,8 +9,30 @@ use crate::functions::scalar::ScalarFunctions as Scalar;
 use crate::table;
 use ::std::sync::Arc;
 use arrow::array::*;
-use arrow::datatypes::DataType;
+use arrow::datatypes::*;
 use arrow::error::ArrowError;
+use num::{abs, Signed, Zero};
+use num_traits::Float;
+use std::{ops::Add, ops::Div, ops::Mul, ops::Sub};
+
+fn eval_numeric_scalar_op<T, F>(
+    a: Vec<&PrimitiveArray<T>>,
+    b: Vec<&PrimitiveArray<T>>,
+    op: F,
+) -> Vec<ArrayRef>
+where
+    T: ArrowNumericType,
+    F: Fn(
+        Vec<&PrimitiveArray<T>>,
+        Vec<&PrimitiveArray<T>>,
+    ) -> Result<Vec<PrimitiveArray<T>>, ArrowError>,
+{
+    op(a, b)
+        .unwrap()
+        .into_iter()
+        .map(|arr| Arc::new(arr) as ArrayRef)
+        .collect()
+}
 
 pub trait Evaluate {
     /// Evaluate an operation against a data source
@@ -28,27 +50,101 @@ impl Evaluate for DataFrame {
             .collect();
         match &operation.expression {
             Expression::Scalar(expr) => match expr {
-                ScalarExpression::Add => {
+                //scalars that take 2 variables
+                ScalarExpression::Add | ScalarExpression::Subtract | ScalarExpression::Divide | ScalarExpression::Multiply => {
                     // we are adding 2 columns together to create a third
                     let column: Vec<ArrayRef> =
                         if let ColumnType::Scalar(dtype) = &operation.output.column_type {
                             match dtype {
-                                DataType::Int16 => Scalar::add(
-                                    table::column_to_arrays_i16(columns.get(0).unwrap()),
-                                    table::column_to_arrays_i16(columns.get(1).unwrap()),
-                                )
-                                .unwrap()
-                                .into_iter()
-                                .map(|arr| Arc::new(arr) as ArrayRef)
-                                .collect(),
-                                DataType::Float64 => Scalar::add(
-                                    table::column_to_arrays_f64(columns.get(0).unwrap()),
-                                    table::column_to_arrays_f64(columns.get(1).unwrap()),
-                                )
-                                .unwrap()
-                                .into_iter()
-                                .map(|arr| Arc::new(arr) as ArrayRef)
-                                .collect(),
+                                DataType::UInt16 => {
+                                    // assign op to use
+                                    let op = match expr {
+                                        ScalarExpression::Add => Scalar::add,
+                                        ScalarExpression::Subtract => Scalar::subtract,
+                                        ScalarExpression::Divide => Scalar::divide,
+                                        ScalarExpression::Multiply => Scalar::multiply
+                                    };
+                                    let a = table::col_to_prim_arrays::<UInt16Type>(columns.get(0).unwrap());
+                                    let b = table::col_to_prim_arrays::<UInt16Type>(columns.get(1).unwrap());
+                                    eval_numeric_scalar_op(a, b, |a, b| op(a, b))
+                                }
+                                DataType::UInt32 => {
+                                    let op = match expr {
+                                        ScalarExpression::Add => Scalar::add,
+                                        ScalarExpression::Subtract => Scalar::subtract,
+                                        ScalarExpression::Divide => Scalar::divide,
+                                        ScalarExpression::Multiply => Scalar::multiply
+                                    };
+                                    let a = table::col_to_prim_arrays::<UInt32Type>(columns.get(0).unwrap());
+                                    let b = table::col_to_prim_arrays::<UInt32Type>(columns.get(1).unwrap());
+                                    eval_numeric_scalar_op(a, b, |a, b| op(a, b))
+                                }
+                                DataType::UInt64 => {
+                                    let op = match expr {
+                                        ScalarExpression::Add => Scalar::add,
+                                        ScalarExpression::Subtract => Scalar::subtract,
+                                        ScalarExpression::Divide => Scalar::divide,
+                                        ScalarExpression::Multiply => Scalar::multiply
+                                    };
+                                    let a = table::col_to_prim_arrays::<UInt64Type>(columns.get(0).unwrap());
+                                    let b = table::col_to_prim_arrays::<UInt64Type>(columns.get(1).unwrap());
+                                    eval_numeric_scalar_op(a, b, |a, b| op(a, b))
+                                }
+                                DataType::Int16 => {
+                                    let op = match expr {
+                                        ScalarExpression::Add => Scalar::add,
+                                        ScalarExpression::Subtract => Scalar::subtract,
+                                        ScalarExpression::Divide => Scalar::divide,
+                                        ScalarExpression::Multiply => Scalar::multiply
+                                    };
+                                    let a = table::col_to_prim_arrays::<Int16Type>(columns.get(0).unwrap());
+                                    let b = table::col_to_prim_arrays::<Int16Type>(columns.get(1).unwrap());
+                                    eval_numeric_scalar_op(a, b, |a, b| op(a, b))
+                                }
+                                DataType::Int32 => {
+                                    let op = match expr {
+                                        ScalarExpression::Add => Scalar::add,
+                                        ScalarExpression::Subtract => Scalar::subtract,
+                                        ScalarExpression::Divide => Scalar::divide,
+                                        ScalarExpression::Multiply => Scalar::multiply
+                                    };
+                                    let a = table::col_to_prim_arrays::<Int32Type>(columns.get(0).unwrap());
+                                    let b = table::col_to_prim_arrays::<Int32Type>(columns.get(1).unwrap());
+                                    eval_numeric_scalar_op(a, b, |a, b| op(a, b))
+                                }
+                                DataType::Int64 => {
+                                    let op = match expr {
+                                        ScalarExpression::Add => Scalar::add,
+                                        ScalarExpression::Subtract => Scalar::subtract,
+                                        ScalarExpression::Divide => Scalar::divide,
+                                        ScalarExpression::Multiply => Scalar::multiply
+                                    };
+                                    let a = table::col_to_prim_arrays::<Int64Type>(columns.get(0).unwrap());
+                                    let b = table::col_to_prim_arrays::<Int64Type>(columns.get(1).unwrap());
+                                    eval_numeric_scalar_op(a, b, |a, b| op(a, b))
+                                }
+                                DataType::Float32 => {
+                                    let op = match expr {
+                                        ScalarExpression::Add => Scalar::add,
+                                        ScalarExpression::Subtract => Scalar::subtract,
+                                        ScalarExpression::Divide => Scalar::divide,
+                                        ScalarExpression::Multiply => Scalar::multiply
+                                    };
+                                    let a = table::col_to_prim_arrays::<Float32Type>(columns.get(0).unwrap());
+                                    let b = table::col_to_prim_arrays::<Float32Type>(columns.get(1).unwrap());
+                                    eval_numeric_scalar_op(a, b, |a, b| op(a, b))
+                                },
+                                DataType::Float64 => {
+                                    let op = match expr {
+                                        ScalarExpression::Add => Scalar::add,
+                                        ScalarExpression::Subtract => Scalar::subtract,
+                                        ScalarExpression::Divide => Scalar::divide,
+                                        ScalarExpression::Multiply => Scalar::multiply
+                                    };
+                                    let a = table::col_to_prim_arrays::<Float64Type>(columns.get(0).unwrap());
+                                    let b = table::col_to_prim_arrays::<Float64Type>(columns.get(1).unwrap());
+                                    eval_numeric_scalar_op(a, b, |a, b| op(a, b))
+                                },
                                 _ => panic!("Unsupported operation"),
                             }
                         } else {
@@ -59,7 +155,7 @@ impl Evaluate for DataFrame {
                         table::Column::from_arrays(column, operation.output.clone().into()),
                     )
                 }
-                _ => panic!("Scalar Expression {:?} not supported", expr),
+                // _ => panic!("Scalar Expression {:?} not supported", expr),
             },
             Expression::Cast => {
                 let input_col: &table::Column = columns.get(0).unwrap();

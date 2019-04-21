@@ -86,39 +86,24 @@ impl ChunkedArray {
     }
 }
 
-macro_rules! column_to_arrays {
-    ($func_name:ident, $b:ty) => {
-        pub fn $func_name(column: &Column) -> Vec<&$b> {
-            let mut arrays = vec![];
-            for chunk in column.data().chunks() {
-                arrays.push(chunk.as_any().downcast_ref::<$b>().unwrap())
-            }
-            arrays
-        }
-    };
+pub fn col_to_prim_arrays<T>(column: &Column) -> Vec<&PrimitiveArray<T>>
+where
+    T: ArrowPrimitiveType,
+{
+    let mut arrays: Vec<&PrimitiveArray<T>> = vec![];
+    for chunk in column.data().chunks() {
+        arrays.push(chunk.as_any().downcast_ref::<PrimitiveArray<T>>().unwrap())
+    }
+    arrays
 }
 
-column_to_arrays!(column_to_arrays_f32, Float32Array);
-column_to_arrays!(column_to_arrays_f64, Float64Array);
-column_to_arrays!(column_to_arrays_bool, BooleanArray);
-column_to_arrays!(column_to_arrays_i8, Int8Array);
-column_to_arrays!(column_to_arrays_i16, Int16Array);
-column_to_arrays!(column_to_arrays_i32, Int32Array);
-column_to_arrays!(column_to_arrays_i64, Int64Array);
-column_to_arrays!(column_to_arrays_u8, UInt8Array);
-column_to_arrays!(column_to_arrays_u16, UInt16Array);
-column_to_arrays!(column_to_arrays_u32, UInt32Array);
-column_to_arrays!(column_to_arrays_u64, UInt64Array);
-column_to_arrays!(column_to_arrays_str, BinaryArray);
-// TODO: add struct and list
-
-// pub fn column_to_arrayx(column: &Column) -> Vec<&Float64Array> {
-//     let mut arrays = vec![];
-//     for chunk in column.data().chunks() {
-//         arrays.push(chunk.as_any().downcast_ref::<Float64Array>().unwrap())
-//     }
-//     arrays
-// }
+pub fn col_to_binary_arrays(column: &Column) -> Vec<&BinaryArray> {
+    let mut arrays = vec![];
+    for chunk in column.data().chunks() {
+        arrays.push(chunk.as_any().downcast_ref::<BinaryArray>().unwrap())
+    }
+    arrays
+}
 
 /// A column data structure consisting of a `Field` and `ChunkedArray`
 #[derive(Clone)]

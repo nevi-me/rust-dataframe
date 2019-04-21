@@ -138,11 +138,9 @@ impl DataFrame {
             }
 
             arrays.push(arr);
-            dbg!("pushed array");
         }
 
         arrays.into_iter().for_each(|array| {
-            dbg!(array.len());
             // the unwrap is infallible as we're passing data that's already been verified
             batches.push(RecordBatch::try_new(self.schema.clone(), array).unwrap());
         });
@@ -519,7 +517,10 @@ mod tests {
         let mut dataframe = DataFrame::from_csv("./test/data/uk_cities_with_headers.csv", None);
         let a = dataframe.column_by_name("lat");
         let b = dataframe.column_by_name("lng");
-        let sum = ScalarFunctions::add(column_to_arrays_f64(a), column_to_arrays_f64(b));
+        let sum = ScalarFunctions::add(
+            col_to_prim_arrays::<Float64Type>(a),
+            col_to_prim_arrays::<Float64Type>(b),
+        );
         // TODO, make this better
         let sum: Vec<ArrayRef> = sum
             .unwrap()
@@ -535,7 +536,7 @@ mod tests {
         assert_eq!(4, dataframe.schema().fields().len());
         assert_eq!(
             54.31776,
-            column_to_arrays_f64(dataframe.column_by_name("lat_lng_sum"))[0].value(0)
+            col_to_prim_arrays::<Float64Type>(dataframe.column_by_name("lat_lng_sum"))[0].value(0)
         );
 
         dataframe = dataframe.with_column_renamed("lat_lng_sum", "ll_sum");
@@ -558,8 +559,10 @@ mod tests {
         // assert_eq!(df2.schema().fields(), df3.schema().fields());
 
         // calculate absolute value of `lng`
-        let abs: Vec<PrimitiveArray<Float64Type>> =
-            ScalarFunctions::abs(column_to_arrays_f64(dataframe.column_by_name("lng"))).unwrap();
+        let abs = ScalarFunctions::abs(col_to_prim_arrays::<Float64Type>(
+            dataframe.column_by_name("lng"),
+        ))
+        .unwrap();
 
         assert_eq!(3.335724, abs[0].value(0));
     }
@@ -569,7 +572,10 @@ mod tests {
         let mut dataframe = DataFrame::from_csv("./test/data/uk_cities_with_headers.csv", None);
         let a = dataframe.column_by_name("lat");
         let b = dataframe.column_by_name("lng");
-        let sum = ScalarFunctions::add(column_to_arrays_f64(a), column_to_arrays_f64(b));
+        let sum = ScalarFunctions::add(
+            col_to_prim_arrays::<Float64Type>(a),
+            col_to_prim_arrays::<Float64Type>(b),
+        );
         // TODO, make this better
         let sum: Vec<ArrayRef> = sum
             .unwrap()
@@ -582,7 +588,7 @@ mod tests {
         );
 
         let city = dataframe.column_by_name("city");
-        let lowercase = ScalarFunctions::lower(column_to_arrays_str(city));
+        let lowercase = ScalarFunctions::lower(col_to_binary_arrays(city));
         let lowercase: Vec<ArrayRef> = lowercase
             .unwrap()
             .into_iter()
@@ -602,7 +608,10 @@ mod tests {
         let mut dataframe = DataFrame::from_csv("./test/data/uk_cities_with_headers.csv", None);
         let a = dataframe.column_by_name("lat");
         let b = dataframe.column_by_name("lng");
-        let sum = ScalarFunctions::add(column_to_arrays_f64(a), column_to_arrays_f64(b));
+        let sum = ScalarFunctions::add(
+            col_to_prim_arrays::<Float64Type>(a),
+            col_to_prim_arrays::<Float64Type>(b),
+        );
         // TODO, make this better
         let sum: Vec<ArrayRef> = sum
             .unwrap()
@@ -615,7 +624,7 @@ mod tests {
         );
 
         let city = dataframe.column_by_name("city");
-        let lowercase = ScalarFunctions::lower(column_to_arrays_str(city));
+        let lowercase = ScalarFunctions::lower(col_to_binary_arrays(city));
         let lowercase: Vec<ArrayRef> = lowercase
             .unwrap()
             .into_iter()
