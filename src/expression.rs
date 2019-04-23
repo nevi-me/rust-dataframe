@@ -1,5 +1,7 @@
 //! Expressions that generate operations and computations
 
+use crate::io::datasource::DataSourceEval;
+use ::std::sync::Arc;
 use arrow::datatypes::DataType;
 use serde::{Deserialize, Serialize};
 
@@ -50,47 +52,270 @@ impl From<Column> for arrow::datatypes::Field {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Frame {
+pub struct Dataset {
     pub(crate) name: String,
     pub(crate) columns: Vec<Column>,
 }
+
+impl Dataset {
+    pub fn get_column(&self, name: &str) -> Option<(usize, &Column)> {
+        let column = self
+            .columns
+            .iter()
+            .enumerate()
+            .find(|(index, col): &(usize, &Column)| &col.name == name);
+        return column;
+    }
+
+    pub fn empty() -> Self {
+        Dataset {
+            name: "empty".to_owned(),
+            columns: vec![],
+        }
+    }
+}
+
+// pub trait Frame {
+//     /// read a data source into a `Frame` implementor
+//     fn read() -> Self;
+//     /// write to a data sink
+//     fn write(&self) -> Self;
+//     fn get_plan(&self) -> Dataset;
+// }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Transformation {
     Aggregate,
     Calculate(Operation),
-    Join,
+    Join(Dataset, Dataset, JoinCriteria),
     Group,
-    // can add other transform types here
+    Project,
+    Read(Reader),
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct JoinCriteria {
+    join_type: JoinType,
+    criteria: (),
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum JoinType {
+    LeftJoin,
+    RightJoin,
+    InnerJoin,
+    FullJoin,
+}
+
+/// A read expression defines how a data source should be read
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Reader {
+    pub(crate) source: DataSourceType,
+}
+
+/// data source types (and options)
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum DataSourceType {
+    Csv(String, CsvReadOptions),
+    Json(String),
+    Feather(String),
+    // TODO provide an option between a table name and a SQL query
+    Sql(String, SqlReadOptions),
+    Parquet(String),
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct CsvReadOptions {
+    pub(crate) has_headers: bool,
+    pub(crate) delimiter: Option<u8>,
+    pub(crate) max_records: Option<usize>,
+    pub(crate) batch_size: usize,
+    pub(crate) projection: Option<Vec<usize>>,
+}
+
+/// The different database protocols that can be supported, used to generate queries at runtime
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum SqlDatabase {
+    Postgres,
+    MsSql,
+    MySql,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct SqlReadOptions {
+    pub(crate) connection_string: String,
+    pub(crate) db: SqlDatabase,
+    pub(crate) limit: Option<usize>,
+}
+
+/// An operation represents a calculation on one or many columns, producing an output column
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Operation {
     pub(crate) name: String,
     pub(crate) inputs: Vec<Column>,
     pub(crate) output: Column,
-    pub(crate) expression: Expression,
+    pub(crate) function: Function,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum Expression<T> {
+    Read(Computation),
+    Compute(Box<Expression<T>>, T),
+    Write(Box<Expression<T>>),
+    Output(T),
+}
+
+// TODO(Neville) I'm currently stuck on creating expressions
+// impl Expression<crate::dataframe::DataFrame> {
+//     pub fn eval(&self) -> crate::dataframe::DataFrame {
+//         match self {
+//             Expression::Read(c) => Expression::Output(crate::dataframe::DataFrame::empty()).eval(),
+//             Expression::Compute(ref x, ref op) => panic!(),
+//             Expression::Write(ref x) => panic!(),
+//             Expression::Output(ref dataframe) => dataframe.clone(),
+//         }
+//     }
+// }
+
+/// A computation determines the impact of one or more transformations on inputs, producing a single output.
+///
+/// Transformations can be various types, such as reading data, calculating columns, or aggregating, etc.
+/// A read computation takes no inputs, and is expected to be able to inspect an input data source to determine
+/// its schema (if one is not provided explicitly).
+///
+/// All other transformations would then take input dataset.
+///
+/// In the future, we expect a Write computation to potentially return a Read against the saved data.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Computation {
-    pub(crate) input: Vec<Frame>,
-    pub(crate) operations: Vec<Operation>,
-    pub(crate) output: Frame,
+    pub(crate) input: Vec<Dataset>,
+    pub(crate) transformations: Vec<Transformation>,
+    pub(crate) output: Dataset,
+}
+
+impl Computation {
+    /// Returns an empty computation which transformations can be added on
+    pub fn empty() -> Self {
+        Self {
+            input: vec![],
+            transformations: vec![],
+            output: Dataset::empty(),
+        }
+    }
+
+    fn compute_read(read: &Reader) -> Self {
+        let dataset = read.get_dataset().unwrap();
+        Self {
+            input: vec![],
+            transformations: vec![Transformation::Read(read.clone())],
+            output: dataset,
+        }
+    }
+
+    /// An operation takes a number of input columns, and produces an output.
+    /// If the output column name already exists in the input, the current default behaviour
+    /// is to override the existing column with the output column.
+    ///
+    /// Thus to compute a calculation, we only need to compute how the output dataset looks like.
+    /// TODO(Neville) hide the operation struct members behind a function to guarantee the above.
+    fn compute_calculation(input: &Dataset, operation: &Operation) -> Dataset {
+        let mut columns = input.columns.clone();
+        let out_column = &operation.output;
+        match input.get_column(&out_column.name) {
+            Some((index, column)) => columns[index] = out_column.clone(),
+            None => columns.push(out_column.clone()),
+        };
+        Dataset {
+            name: "unnamed_dataset".to_owned(),
+            columns: columns.to_vec(),
+        }
+    }
+
+    /// Compute how a dataset looks like after applying transformations to it
+    pub fn compute_transform(inputs: Vec<Dataset>, transforms: Vec<Transformation>) -> Self {
+        use Transformation::*;
+        if transforms.is_empty() {
+            panic!("Cannot compute with 0 transformations")
+        }
+        let mut output: Dataset = Dataset::empty();
+        match inputs.len() {
+            0 => {
+                // a read transform takes 0 inputs
+                let mut has_read_data = false;
+                for transform in &transforms {
+                    match (transform, has_read_data) {
+                        (Read(reader), false) => {
+                            // read the data
+                            output = Self::compute_read(&reader).output;
+                            has_read_data = true;
+                        }
+                        (t @ _, false) => panic!("Transformation {:?} requires input data", t),
+                        (Read(_), true) => panic!("Chained reads are currently not supported, a read has taken place already"),
+                        (_, _) => unimplemented!(),
+                    }
+                }
+            }
+            1 => {
+                output = inputs.get(0).unwrap().clone();
+                for transform in &transforms {
+                    match transform {
+                        Transformation::Read(_) => {
+                            panic!("A read transformation that has inputs is not supported")
+                        }
+                        Transformation::Calculate(operation) => {
+                            output = Self::compute_calculation(&output, &operation);
+                        }
+                        _ => unimplemented!(
+                            "TODO transformations not yet implemented for single data input"
+                        ),
+                    }
+                }
+            }
+            2 => panic!("two input transformations aren't supported yet"),
+            _ => panic!("unsuported number of input datasets: {}", inputs.len()),
+        }
+        Self {
+            input: inputs,
+            transformations: transforms,
+            output,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum Expression {
-    Scalar(ScalarExpression),
+pub enum Function {
+    Scalar(ScalarFunction),
+    Array(ArrayFunction),
     Cast,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum ScalarExpression {
+pub enum ScalarFunction {
     Add,
     Subtract,
     Divide,
     Multiply,
+    Abs,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum ArrayFunction {
+    Contains,
+    Join,
+    Distinct,
+    Except,
+    Intersect,
+    Max,
+    Min,
+    Position,
+    Remove,
+    Repeat,
+    Sort,
+    Union,
+    Overlap,
+    Zip,
+    CollectList,
+    CollectSet,
 }
 
 #[cfg(test)]
@@ -99,7 +324,7 @@ mod tests {
 
     #[test]
     fn debug() {
-        let frame = Frame {
+        let dataset = Dataset {
             name: "Input Table 1".to_owned(),
             columns: vec![Column {
                 name: "id".to_owned(),
@@ -107,8 +332,8 @@ mod tests {
             }],
         };
 
-        assert_eq!("Frame { name: \"Input Table 1\", columns: [Column { name: \"id\", column_type: Scalar(Int64) }] }", format!("{:?}", frame));
-        let as_json = serde_json::to_string(&frame).unwrap();
+        assert_eq!("Dataset { name: \"Input Table 1\", columns: [Column { name: \"id\", column_type: Scalar(Int64) }] }", format!("{:?}", dataset));
+        let as_json = serde_json::to_string(&dataset).unwrap();
         assert_eq!("{\"name\":\"Input Table 1\",\"columns\":[{\"name\":\"id\",\"column_type\":{\"Scalar\":\"Int64\"}}]}", as_json);
     }
 }

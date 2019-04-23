@@ -67,7 +67,7 @@ impl ScalarOperation for AddOperation {
                                     )),
                                     column_type: a_type.clone().into(),
                                 },
-                                expression: Expression::Scalar(ScalarExpression::Add),
+                                function: Function::Scalar(ScalarFunction::Add),
                             },
                         ])
                     } else {
@@ -83,7 +83,7 @@ impl ScalarOperation for AddOperation {
                                 )),
                                 column_type: a_type.clone().into(),
                             },
-                            expression: Expression::Scalar(ScalarExpression::Add),
+                            function: Function::Scalar(ScalarFunction::Add),
                         }])
                     }
                 }
@@ -127,7 +127,7 @@ impl ScalarOperation for CastOperation {
                         name: name.unwrap_or(format!("{}({} as datatype)", Self::name(), &a.name)),
                         column_type: ColumnType::Scalar(to_type.clone()),
                     },
-                    expression: Expression::Cast,
+                    function: Function::Cast,
                 }]),
             }
         }
@@ -186,7 +186,7 @@ impl ScalarOperation for SubtractOperation {
                                     )),
                                     column_type: a_type.clone().into(),
                                 },
-                                expression: Expression::Scalar(ScalarExpression::Add),
+                                function: Function::Scalar(ScalarFunction::Add),
                             },
                         ])
                     } else {
@@ -202,7 +202,7 @@ impl ScalarOperation for SubtractOperation {
                                 )),
                                 column_type: ColumnType::Scalar(a_type.clone()),
                             },
-                            expression: Expression::Scalar(ScalarExpression::Subtract),
+                            function: Function::Scalar(ScalarFunction::Subtract),
                         }])
                     }
                 }

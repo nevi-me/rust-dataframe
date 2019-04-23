@@ -16,9 +16,10 @@ fn pg_to_arrow_type(dt: &Type) -> Option<DataType> {
         &Type::BYTEA | &Type::CHAR | &Type::NAME | &Type::TEXT | &Type::VARCHAR => {
             Some(DataType::Utf8)
         }
-        &Type::INT8 => Some(DataType::Int64),
         &Type::INT2 => Some(DataType::Int16),
         &Type::INT4 => Some(DataType::Int32),
+        &Type::INT8 => Some(DataType::Int64),
+        &Type::NUMERIC => Some(DataType::Float64),
         //        &OID => None,
         //        &JSON => None,
         &Type::FLOAT4 => Some(DataType::Float32),
@@ -106,6 +107,16 @@ pub fn read_table(
                         };
                     }
                 }
+                DataType::Float64 => {
+                    let field_builder = builder.field_builder::<Float64Builder>(j).unwrap();
+                    for i in 0..chunk.len() {
+                        let row: &Row = chunk.get(i).unwrap();
+                        match row.try_get(j) {
+                            Ok(value) => field_builder.append_value(value).unwrap(),
+                            Err(_) => field_builder.append_null().unwrap(),
+                        };
+                    }
+                }
                 DataType::Timestamp(TimeUnit::Millisecond) => {
                     let field_builder = builder
                         .field_builder::<TimestampMillisecondBuilder>(j)
@@ -150,8 +161,12 @@ pub fn read_table(
                 t @ _ => panic!("Field builder for {:?} not yet supported", t),
             }
         }
-        builder.append(true).unwrap();
-        batches.push(RecordBatch::from(&builder.finish()));
+        // TODO perhaps change the order of processing so we can do this earlier
+        for i in 0..chunk.len() {
+            builder.append(true).unwrap();
+        }
+        let batch: RecordBatch = RecordBatch::from(&builder.finish());
+        batches.push(batch);
     });
     Ok(batches)
 }

@@ -24,7 +24,7 @@ pub struct DataFrame {
 
 impl DataFrame {
     /// Create an empty `DataFrame`
-    fn empty() -> Self {
+    pub fn empty() -> Self {
         DataFrame {
             schema: Arc::new(Schema::empty()),
             columns: vec![],
