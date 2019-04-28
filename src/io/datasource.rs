@@ -15,6 +15,7 @@ impl DataSourceEval for Reader {
         match &self.source {
             Csv(path, options) => {
                 let mut builder = CsvBuilder::new()
+                    .has_headers(options.has_headers)
                     .infer_schema(options.max_records)
                     .with_batch_size(options.batch_size)
                     .with_delimiter(options.delimiter.unwrap_or(b','));

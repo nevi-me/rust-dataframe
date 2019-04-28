@@ -10,6 +10,7 @@ pub mod evaluation;
 pub mod expression;
 pub mod functions;
 pub mod io;
+pub mod lazyframe;
 pub mod operation;
 pub mod table;
 pub mod utils;

@@ -211,6 +211,110 @@ impl ScalarOperation for SubtractOperation {
     }
 }
 
+// pub struct TrigOperation(TrigFunction);
+
+// pub enum TrigFunction {
+//     Sin,
+//     Cos,
+//     Tan,
+//     Cot,
+//     Sec,
+//     Cosec,
+// }
+
+pub struct SinOperation;
+
+impl ScalarOperation for SinOperation {
+    fn name() -> &'static str {
+        // note that we override this name with the actual operation
+        "sin"
+    }
+
+    fn transform(
+        inputs: Vec<Column>,
+        name: Option<String>,
+        to_type: Option<DataType>,
+    ) -> Result<Vec<Operation>, ArrowError> {
+        // add n columns together provided that they are of the same data type
+        // for now we support 2 inputs at a time
+        // the output data type is also ignored
+        if inputs.len() != 1 {
+            Err(ArrowError::ComputeError(
+                "Sine operation expects 2 inputs".to_string(),
+            ))
+        } else {
+            let a = &inputs[0];
+            match &a.column_type {
+                ColumnType::Array(_) => Err(ArrowError::ComputeError(
+                    "Sine operation is currently only supported on scalar columns".to_string(),
+                )),
+                ColumnType::Scalar(dtype) => {
+                    // check if datatype is a float, and convert to f64 if not
+                    match dtype {
+                        DataType::Int8
+                        | DataType::Int16
+                        | DataType::Int32
+                        | DataType::Int64
+                        | DataType::UInt8
+                        | DataType::UInt16
+                        | DataType::UInt32
+                        | DataType::UInt64 => {
+                            let cast_name = name.clone().unwrap_or(format!(
+                                "{}({} as datatype)",
+                                CastOperation::name(),
+                                &a.name
+                            ));
+                            let cast_output = Column {
+                                name: cast_name.clone(),
+                                column_type: ColumnType::Scalar(DataType::Float64),
+                            };
+                            Ok(vec![
+                                Operation {
+                                    name: CastOperation::name().to_string(),
+                                    inputs: inputs.clone(),
+                                    output: cast_output.clone(),
+                                    function: Function::Cast,
+                                },
+                                Operation {
+                                    name: Self::name().to_string(),
+                                    inputs: vec![cast_output],
+                                    output: Column {
+                                        name: name.unwrap_or(format!(
+                                            "{}({} as datatype)",
+                                            Self::name(),
+                                            &a.name
+                                        )),
+                                        column_type: ColumnType::Scalar(DataType::Float64),
+                                    },
+                                    function: Function::Scalar(ScalarFunction::Sine),
+                                },
+                            ])
+                        }
+                        DataType::Float32 | DataType::Float64 => Ok(vec![Operation {
+                            name: Self::name().to_string(),
+                            inputs: inputs.clone(),
+                            output: Column {
+                                name: name.unwrap_or(format!(
+                                    "{}({} as datatype)",
+                                    Self::name(),
+                                    &a.name
+                                )),
+                                column_type: ColumnType::Scalar(dtype.clone()),
+                            },
+                            function: Function::Scalar(ScalarFunction::Sine),
+                        }]),
+                        _ => Err(ArrowError::ComputeError(format!(
+                            "Cannot perform {} operation from {:?} data type",
+                            Self::name(),
+                            dtype,
+                        ))),
+                    }
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

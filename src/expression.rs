@@ -3,6 +3,7 @@
 use crate::io::datasource::DataSourceEval;
 use ::std::sync::Arc;
 use arrow::datatypes::DataType;
+use arrow::error::ArrowError;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -73,15 +74,25 @@ impl Dataset {
             columns: vec![],
         }
     }
-}
 
-// pub trait Frame {
-//     /// read a data source into a `Frame` implementor
-//     fn read() -> Self;
-//     /// write to a data sink
-//     fn write(&self) -> Self;
-//     fn get_plan(&self) -> Dataset;
-// }
+    // overrides or appends a column
+    pub fn append_column(&self, column: Column) -> Self {
+        let existing = self.get_column(&column.name);
+        let mut columns = self.columns.clone();
+        match existing {
+            Some((index, _)) => {
+                columns[index] = column;
+            }
+            None => {
+                columns.push(column);
+            }
+        };
+        Self {
+            name: self.name.clone(),
+            columns,
+        }
+    }
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Transformation {
@@ -151,18 +162,101 @@ pub struct SqlReadOptions {
 /// An operation represents a calculation on one or many columns, producing an output column
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Operation {
+    // TODO move operation to operation.rs
     pub(crate) name: String,
     pub(crate) inputs: Vec<Column>,
     pub(crate) output: Column,
     pub(crate) function: Function,
 }
 
+impl Operation {
+    pub(crate) fn rename(col: &Column, to: &str) -> Self {
+        Self {
+            name: "rename".to_owned(),
+            inputs: vec![col.clone()],
+            output: Column {
+                name: to.to_owned(),
+                column_type: col.column_type.clone(),
+            },
+            function: Function::Rename,
+        }
+    }
+
+    /// create a calculation operation
+    ///
+    /// The operation can return one or more transformations (e.g. if a column needs casting before the required operation)
+    pub(crate) fn calculate(
+        ds: &Dataset,
+        // we search the dataset for names
+        in_col_names: Vec<&str>,
+        function: Function,
+        out_col_name: Option<String>,
+        out_col_type: Option<DataType>,
+    ) -> Result<Vec<Transformation>, ArrowError> {
+        use crate::operation::ScalarOperation;
+        use Function::*;
+        // get columns
+        let mut inputs = vec![];
+        for name in in_col_names {
+            let col = ds.get_column(name);
+            match col {
+                Some((index, col)) => {
+                    inputs.push(col.clone());
+                }
+                None => {
+                    return Err(ArrowError::InvalidArgumentError(format!(
+                        "Column {} not found",
+                        name
+                    )));
+                }
+            }
+        }
+        match function {
+            Function::Rename => panic!("Please use rename function directly for now"),
+            Function::Cast => unimplemented!("cast op"),
+            Function::Scalar(s) => {
+                use ScalarFunction::*;
+                let operations = match s {
+                    ScalarFunction::Abs => panic!(),
+                    ScalarFunction::Add => crate::operation::AddOperation::transform(
+                        inputs,
+                        out_col_name,
+                        out_col_type,
+                    )?,
+                    ScalarFunction::Subtract => crate::operation::SubtractOperation::transform(
+                        inputs,
+                        out_col_name,
+                        out_col_type,
+                    )?,
+                    ScalarFunction::Multiply => panic!(),
+                    ScalarFunction::Divide => panic!(),
+                    ScalarFunction::Sine => crate::operation::SinOperation::transform(
+                        inputs,
+                        out_col_name,
+                        out_col_type,
+                    )?,
+                    ScalarFunction::Cosine => panic!(),
+                    ScalarFunction::Tangent => panic!(),
+                    ScalarFunction::Cosecant => panic!(),
+                    ScalarFunction::Secant => panic!(),
+                    ScalarFunction::Cotangent => panic!(),
+                };
+                Ok(operations
+                    .into_iter()
+                    .map(|op| Transformation::Calculate(op))
+                    .collect())
+            }
+            Function::Array(a) => unimplemented!("array op"),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum Expression<T> {
+pub enum Expression {
     Read(Computation),
-    Compute(Box<Expression<T>>, T),
-    Write(Box<Expression<T>>),
-    Output(T),
+    Compute(Box<Expression>, Computation),
+    Write(Box<Expression>),
+    Output(usize),
 }
 
 // TODO(Neville) I'm currently stuck on creating expressions
@@ -203,7 +297,7 @@ impl Computation {
         }
     }
 
-    fn compute_read(read: &Reader) -> Self {
+    pub fn compute_read(read: &Reader) -> Self {
         let dataset = read.get_dataset().unwrap();
         Self {
             input: vec![],
@@ -287,6 +381,7 @@ pub enum Function {
     Scalar(ScalarFunction),
     Array(ArrayFunction),
     Cast,
+    Rename,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -296,6 +391,12 @@ pub enum ScalarFunction {
     Divide,
     Multiply,
     Abs,
+    Sine,
+    Cosine,
+    Tangent,
+    Cotangent,
+    Secant,
+    Cosecant,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
