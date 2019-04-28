@@ -378,12 +378,15 @@ impl ScalarFunctions {
     // collection function
     fn shuffle() {}
     fn signum() {}
-    fn sin<T>(array: &PrimitiveArray<T>) -> Result<PrimitiveArray<T>, ArrowError>
+    pub fn sin<T>(array: Vec<&PrimitiveArray<T>>) -> Result<Vec<PrimitiveArray<T>>, ArrowError>
     where
         T: ArrowNumericType,
-        T::Native: Add<Output = T::Native> + num_traits::Float,
+        T::Native: num_traits::Float,
     {
-        scalar_op(array, |array| Ok(num::Float::sin(array)))
+        array
+            .iter()
+            .map(|a| scalar_op(a, |a| Ok(num::Float::sin(a))))
+            .collect()
     }
     fn sinh<T>(array: &PrimitiveArray<T>) -> Result<PrimitiveArray<T>, ArrowError>
     where
@@ -425,12 +428,15 @@ impl ScalarFunctions {
         Ok(b.finish())
     }
     fn substring_index() {}
-    fn tan<T>(array: &PrimitiveArray<T>) -> Result<PrimitiveArray<T>, ArrowError>
+    pub fn tan<T>(array: Vec<&PrimitiveArray<T>>) -> Result<Vec<PrimitiveArray<T>>, ArrowError>
     where
         T: ArrowNumericType,
-        T::Native: Add<Output = T::Native> + num_traits::Float,
+        T::Native: num_traits::Float,
     {
-        scalar_op(array, |array| Ok(num::Float::tan(array)))
+        array
+            .iter()
+            .map(|a| scalar_op(a, |a| Ok(num::Float::tan(a))))
+            .collect()
     }
     fn tanh<T>(array: &PrimitiveArray<T>) -> Result<PrimitiveArray<T>, ArrowError>
     where

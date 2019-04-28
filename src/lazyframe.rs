@@ -10,7 +10,7 @@ use std::sync::Arc;
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct LazyFrame {
     id: String,
-    expression: Expression,
+    pub(crate) expression: Expression,
     output: Dataset,
 }
 

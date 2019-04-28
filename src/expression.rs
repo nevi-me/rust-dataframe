@@ -256,20 +256,27 @@ pub enum Expression {
     Read(Computation),
     Compute(Box<Expression>, Computation),
     Write(Box<Expression>),
-    Output(usize),
+    Output,
 }
 
-// TODO(Neville) I'm currently stuck on creating expressions
-// impl Expression<crate::dataframe::DataFrame> {
-//     pub fn eval(&self) -> crate::dataframe::DataFrame {
-//         match self {
-//             Expression::Read(c) => Expression::Output(crate::dataframe::DataFrame::empty()).eval(),
-//             Expression::Compute(ref x, ref op) => panic!(),
-//             Expression::Write(ref x) => panic!(),
-//             Expression::Output(ref dataframe) => dataframe.clone(),
-//         }
-//     }
-// }
+impl Expression {
+    /// unroll the expression into a number of computations
+    ///
+    /// This is used for optimising queries
+    pub fn unroll(&self) -> Vec<Computation> {
+        let mut computations = vec![];
+        match self {
+            Expression::Read(c) => computations.push(c.clone()),
+            Expression::Compute(expr, c) => {
+                computations.push(c.clone());
+                computations.append(&mut expr.unroll());
+            }
+            Expression::Write(expr) => computations.append(&mut expr.unroll()),
+            Expression::Output => {}
+        };
+        computations
+    }
+}
 
 /// A computation determines the impact of one or more transformations on inputs, producing a single output.
 ///
