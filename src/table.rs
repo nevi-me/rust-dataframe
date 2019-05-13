@@ -57,7 +57,7 @@ impl ChunkedArray {
         &self.chunks
     }
 
-    /// Construct a zero-copy slice of the chunked array with the indicated offset and length.Arc
+    /// Construct a zero-copy slice of the chunked array with the indicated offset and length.
     ///
     /// The `offset` is the position of the first element in the constructed slice.
     /// `length` is the length of the slice. If there are not enough elements in the chunked array,

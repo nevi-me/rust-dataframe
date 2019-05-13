@@ -149,7 +149,7 @@ impl DataFrame {
     }
 
     /// Returns dataframe with the first n records selected
-    fn take(&self, count: usize) -> Self {
+    pub fn take(&self, count: usize) -> Self {
         DataFrame::new(
             self.schema.clone(),
             self.columns
@@ -158,6 +158,9 @@ impl DataFrame {
                 .map(|col| col.slice(0, Some(count)))
                 .collect(),
         )
+    }
+    pub fn limit(&self, count: usize) -> Self {
+        self.take(count)
     }
 
     fn intersect(&self, other: &DataFrame) -> Self {
