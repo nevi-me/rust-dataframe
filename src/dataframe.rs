@@ -2,7 +2,7 @@ use crate::expression::{BooleanFilter, BooleanFilterEval, BooleanInput};
 use crate::table::Column;
 use crate::utils;
 use arrow::array;
-use arrow::array::{Array, ArrayRef};
+use arrow::array::{Array, ArrayRef, UInt64Array};
 use arrow::array_data::ArrayDataBuilder;
 use arrow::array_data::ArrayDataRef;
 use arrow::csv::Reader as CsvReader;
@@ -178,6 +178,26 @@ impl DataFrame {
                 .map(|col| col.filter(&mask))
                 .collect(),
         )
+    }
+
+    /// Return the dataframe with an id that monotonically increases
+    ///
+    /// The id is a 64-bit array
+    pub fn with_id(self, name: &str) -> Self {
+        let distribution = &self.column(0).data.chunk_counts();
+        dbg!(&distribution);
+        let arrays = distribution
+            .iter()
+            .zip(0..distribution.len())
+            .map(|(count, index)| {
+                // assumption that we won't create record batches that have 100k rows
+                let multiple = (100_000 * index) as u64;
+                let range: Vec<u64> = ((multiple + 1)..(multiple + *count as u64 + 1)).collect();
+                Arc::new(UInt64Array::from(range)) as ArrayRef
+            })
+            .collect();
+        let column = Column::from_arrays(arrays, Field::new(name, DataType::UInt64, false));
+        self.with_column(name, column)
     }
 
     fn intersect(&self, other: &DataFrame) -> Self {
@@ -435,11 +455,12 @@ impl DataFrame {
         Ok(())
     }
 
-    /// get a column from table as column expression
+    /// get a column from table as a column expression
     pub fn expr_column(&self, i: usize) -> crate::expression::Column {
         self.schema().field(i).clone().into()
     }
 
+    /// Get a column from table by name as a column expression
     pub fn expr_column_by_name(&self, name: &str) -> crate::expression::Column {
         self.schema()
             .column_with_name(name)
@@ -449,6 +470,7 @@ impl DataFrame {
             .into()
     }
 
+    /// Evaluate a `BooleanFilter` against dataframe, returning a column with chunked `BooleanArray` masks
     fn evaluate_boolean_filter(
         &self,
         filter: &BooleanFilter,
@@ -675,5 +697,22 @@ mod tests {
 
         let write = dataframe.to_csv("/tmp/uk_cities_out.csv");
         assert!(write.is_ok());
+    }
+
+    #[test]
+    fn test_increasing_id() {
+        let mut dataframe = DataFrame::from_csv("./test/data/uk_cities_with_headers.csv", None);
+        dataframe = dataframe.limit(10);
+        dataframe = dataframe.with_id("id");
+        let id = dataframe.column_by_name("id");
+        assert_eq!(id.data_type(), &DataType::UInt64);
+        assert_eq!(id.name(), "id");
+        assert_eq!(id.num_rows(), 10);
+        let array = id.data().chunk(0);
+        let array: UInt64Array = UInt64Array::from(array.data());
+        assert_eq!(
+            array.value_slice(0, 10),
+            &(1u64..11u64).collect::<Vec<u64>>()[..]
+        );
     }
 }

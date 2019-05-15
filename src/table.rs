@@ -47,6 +47,13 @@ impl ChunkedArray {
         self.chunks.len()
     }
 
+    /// Get the count per chunk
+    ///
+    /// This is useful for repartitioning
+    pub(crate) fn chunk_counts(&self) -> Vec<usize> {
+        self.chunks().iter().map(|chunk| chunk.len()).collect()
+    }
+
     /// Get a chunk from the chunked array by index
     /// TODO: should this have bounds-chacking?
     pub fn chunk(&self, i: usize) -> &Arc<Array> {
