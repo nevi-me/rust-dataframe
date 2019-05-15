@@ -5,7 +5,7 @@
 
 use crate::dataframe::DataFrame;
 use crate::expression::*;
-use crate::functions::scalar::ScalarFunctions as Scalar;
+use crate::functions::scalar::ScalarFunctions as ScalarFn;
 use crate::table;
 use ::std::sync::Arc;
 use arrow::array::*;
@@ -72,6 +72,8 @@ impl Evaluate for DataFrame {
                     Join(_, _, _) => panic!(),
                     Project => panic!(),
                     Read(reader) => Self::read(&reader),
+                    Filter(cond) => frame.filter(cond),
+                    Limit(size) => frame.limit(*size),
                 };
             }
         }
@@ -100,10 +102,10 @@ impl Evaluate for DataFrame {
                             DataType::UInt16 => {
                                 // assign op to use
                                 let op = match expr {
-                                    ScalarFunction::Add => Scalar::add,
-                                    ScalarFunction::Subtract => Scalar::subtract,
-                                    ScalarFunction::Divide => Scalar::divide,
-                                    ScalarFunction::Multiply => Scalar::multiply,
+                                    ScalarFunction::Add => ScalarFn::add,
+                                    ScalarFunction::Subtract => ScalarFn::subtract,
+                                    ScalarFunction::Divide => ScalarFn::divide,
+                                    ScalarFunction::Multiply => ScalarFn::multiply,
                                     _ => unreachable!(),
                                 };
                                 let a = table::col_to_prim_arrays::<UInt16Type>(
@@ -116,10 +118,10 @@ impl Evaluate for DataFrame {
                             }
                             DataType::UInt32 => {
                                 let op = match expr {
-                                    ScalarFunction::Add => Scalar::add,
-                                    ScalarFunction::Subtract => Scalar::subtract,
-                                    ScalarFunction::Divide => Scalar::divide,
-                                    ScalarFunction::Multiply => Scalar::multiply,
+                                    ScalarFunction::Add => ScalarFn::add,
+                                    ScalarFunction::Subtract => ScalarFn::subtract,
+                                    ScalarFunction::Divide => ScalarFn::divide,
+                                    ScalarFunction::Multiply => ScalarFn::multiply,
                                     _ => unreachable!(),
                                 };
                                 let a = table::col_to_prim_arrays::<UInt32Type>(
@@ -132,10 +134,10 @@ impl Evaluate for DataFrame {
                             }
                             DataType::UInt64 => {
                                 let op = match expr {
-                                    ScalarFunction::Add => Scalar::add,
-                                    ScalarFunction::Subtract => Scalar::subtract,
-                                    ScalarFunction::Divide => Scalar::divide,
-                                    ScalarFunction::Multiply => Scalar::multiply,
+                                    ScalarFunction::Add => ScalarFn::add,
+                                    ScalarFunction::Subtract => ScalarFn::subtract,
+                                    ScalarFunction::Divide => ScalarFn::divide,
+                                    ScalarFunction::Multiply => ScalarFn::multiply,
                                     _ => unreachable!(),
                                 };
                                 let a = table::col_to_prim_arrays::<UInt64Type>(
@@ -148,10 +150,10 @@ impl Evaluate for DataFrame {
                             }
                             DataType::Int16 => {
                                 let op = match expr {
-                                    ScalarFunction::Add => Scalar::add,
-                                    ScalarFunction::Subtract => Scalar::subtract,
-                                    ScalarFunction::Divide => Scalar::divide,
-                                    ScalarFunction::Multiply => Scalar::multiply,
+                                    ScalarFunction::Add => ScalarFn::add,
+                                    ScalarFunction::Subtract => ScalarFn::subtract,
+                                    ScalarFunction::Divide => ScalarFn::divide,
+                                    ScalarFunction::Multiply => ScalarFn::multiply,
                                     _ => unreachable!(),
                                 };
                                 let a =
@@ -162,10 +164,10 @@ impl Evaluate for DataFrame {
                             }
                             DataType::Int32 => {
                                 let op = match expr {
-                                    ScalarFunction::Add => Scalar::add,
-                                    ScalarFunction::Subtract => Scalar::subtract,
-                                    ScalarFunction::Divide => Scalar::divide,
-                                    ScalarFunction::Multiply => Scalar::multiply,
+                                    ScalarFunction::Add => ScalarFn::add,
+                                    ScalarFunction::Subtract => ScalarFn::subtract,
+                                    ScalarFunction::Divide => ScalarFn::divide,
+                                    ScalarFunction::Multiply => ScalarFn::multiply,
                                     _ => unreachable!(),
                                 };
                                 let a =
@@ -176,10 +178,10 @@ impl Evaluate for DataFrame {
                             }
                             DataType::Int64 => {
                                 let op = match expr {
-                                    ScalarFunction::Add => Scalar::add,
-                                    ScalarFunction::Subtract => Scalar::subtract,
-                                    ScalarFunction::Divide => Scalar::divide,
-                                    ScalarFunction::Multiply => Scalar::multiply,
+                                    ScalarFunction::Add => ScalarFn::add,
+                                    ScalarFunction::Subtract => ScalarFn::subtract,
+                                    ScalarFunction::Divide => ScalarFn::divide,
+                                    ScalarFunction::Multiply => ScalarFn::multiply,
                                     _ => unreachable!(),
                                 };
                                 let a =
@@ -190,10 +192,10 @@ impl Evaluate for DataFrame {
                             }
                             DataType::Float32 => {
                                 let op = match expr {
-                                    ScalarFunction::Add => Scalar::add,
-                                    ScalarFunction::Subtract => Scalar::subtract,
-                                    ScalarFunction::Divide => Scalar::divide,
-                                    ScalarFunction::Multiply => Scalar::multiply,
+                                    ScalarFunction::Add => ScalarFn::add,
+                                    ScalarFunction::Subtract => ScalarFn::subtract,
+                                    ScalarFunction::Divide => ScalarFn::divide,
+                                    ScalarFunction::Multiply => ScalarFn::multiply,
                                     _ => unreachable!(),
                                 };
                                 let a = table::col_to_prim_arrays::<Float32Type>(
@@ -206,10 +208,10 @@ impl Evaluate for DataFrame {
                             }
                             DataType::Float64 => {
                                 let op = match expr {
-                                    ScalarFunction::Add => Scalar::add,
-                                    ScalarFunction::Subtract => Scalar::subtract,
-                                    ScalarFunction::Divide => Scalar::divide,
-                                    ScalarFunction::Multiply => Scalar::multiply,
+                                    ScalarFunction::Add => ScalarFn::add,
+                                    ScalarFunction::Subtract => ScalarFn::subtract,
+                                    ScalarFunction::Divide => ScalarFn::divide,
+                                    ScalarFunction::Multiply => ScalarFn::multiply,
                                     _ => unreachable!(),
                                 };
                                 let a = table::col_to_prim_arrays::<Float64Type>(
@@ -239,9 +241,9 @@ impl Evaluate for DataFrame {
                             DataType::Float32 => {
                                 // assign op to use
                                 let op = match expr {
-                                    ScalarFunction::Sine => Scalar::sin,
-                                    ScalarFunction::Cosine => Scalar::cos,
-                                    ScalarFunction::Tangent => Scalar::tan,
+                                    ScalarFunction::Sine => ScalarFn::sin,
+                                    ScalarFunction::Cosine => ScalarFn::cos,
+                                    ScalarFunction::Tangent => ScalarFn::tan,
                                     // ScalarFunction::Multiply => Scalar::multiply,
                                     _ => panic!("unsupported function {:?}", expr),
                                 };
@@ -252,9 +254,9 @@ impl Evaluate for DataFrame {
                             }
                             DataType::Float64 => {
                                 let op = match expr {
-                                    ScalarFunction::Sine => Scalar::sin,
-                                    ScalarFunction::Cosine => Scalar::cos,
-                                    ScalarFunction::Tangent => Scalar::tan,
+                                    ScalarFunction::Sine => ScalarFn::sin,
+                                    ScalarFunction::Cosine => ScalarFn::cos,
+                                    ScalarFunction::Tangent => ScalarFn::tan,
                                     // ScalarFunction::Multiply => Scalar::multiply,
                                     _ => panic!("unsupported function {:?}", expr),
                                 };
@@ -301,6 +303,8 @@ impl Evaluate for DataFrame {
                 &operation.inputs.first().unwrap().name,
                 &operation.output.name,
             ),
+            Function::Limit(limit) => self.limit(*limit),
+            Function::Filter(filter) => self.filter(filter),
             expr @ _ => panic!("Function {:?} not supported", expr),
         }
     }
@@ -310,11 +314,11 @@ impl Evaluate for DataFrame {
             // TODO build with options, good first issue
             Csv(path, options) => DataFrame::from_csv(&path, None),
             Json(path) => DataFrame::from_json(&path, None),
-            Parquet(path) => unimplemented!("Parquet data sources not ye supported"),
+            Parquet(path) => unimplemented!("Parquet data sources not yet supported"),
             Feather(path) => DataFrame::from_feather(&path).unwrap(),
             Sql(table, options) => match &options.db {
                 SqlDatabase::Postgres => DataFrame::from_sql(&options.connection_string, &table),
-                t @ _ => unimplemented!("SQL Protocol {:?} not supported", t),
+                t @ _ => unimplemented!("SQL Protocol {:?} not yet supported", t),
             },
         }
     }
@@ -326,7 +330,7 @@ mod tests {
 
     use crate::io::datasource::DataSourceEval;
     use crate::lazyframe::LazyFrame;
-    use crate::operation::{AddOperation, CastOperation, ScalarOperation};
+    use crate::operation::scalar::{AddOperation, CastOperation, ScalarOperation};
 
     #[test]
     fn test_lazy_evaluation() {
@@ -364,10 +368,45 @@ mod tests {
                 None,
             )
             .unwrap();
+        frame = frame.limit(25);
+        // filter for where (lat > 55 or (sin_lat <= sin_lng or lng > -10))
+        // frame = frame.filter(BooleanFilter::Or(
+        //     Box::new(BooleanFilter::Gt(
+        //         Box::new(BooleanFilter::Input(BooleanInput::Column(Column {
+        //             name: "lat".to_owned(),
+        //             column_type: ColumnType::Scalar(DataType::Float64),
+        //         }))),
+        //         Box::new(BooleanFilter::Input(BooleanInput::Scalar(Scalar::Float64(
+        //             55.0,
+        //         )))),
+        //     )),
+        //     Box::new(BooleanFilter::Or(
+        //         Box::new(BooleanFilter::Le(
+        //             Box::new(BooleanFilter::Input(BooleanInput::Column(Column {
+        //                 name: "sin_lat".to_owned(),
+        //                 column_type: ColumnType::Scalar(DataType::Float64),
+        //             }))),
+        //             Box::new(BooleanFilter::Input(BooleanInput::Column(Column {
+        //                 name: "sin_lng".to_owned(),
+        //                 column_type: ColumnType::Scalar(DataType::Float64),
+        //             }))),
+        //         )),
+        //         Box::new(BooleanFilter::Gt(
+        //             Box::new(BooleanFilter::Input(BooleanInput::Column(Column {
+        //                 name: "lng".to_owned(),
+        //                 column_type: ColumnType::Scalar(DataType::Float64),
+        //             }))),
+        //             Box::new(BooleanFilter::Input(BooleanInput::Scalar(Scalar::Float64(
+        //                 -10.0,
+        //             )))),
+        //         )),
+        //     )),
+        // ));
         let ops = frame.expression.unroll();
 
         let mut dataframe = DataFrame::empty();
         dataframe = dataframe.evaluate(&ops);
         dataframe.to_csv("./target/test_output.csv").unwrap();
+        assert_eq!(25, dataframe.num_rows());
     }
 }

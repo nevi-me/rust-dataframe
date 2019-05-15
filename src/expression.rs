@@ -102,6 +102,8 @@ pub enum Transformation {
     Group,
     Project,
     Read(Reader),
+    Limit(usize),
+    Filter(BooleanFilter),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -193,7 +195,7 @@ impl Operation {
         out_col_name: Option<String>,
         out_col_type: Option<DataType>,
     ) -> Result<Vec<Transformation>, ArrowError> {
-        use crate::operation::ScalarOperation;
+        use crate::operation::scalar::ScalarOperation;
         use Function::*;
         // get columns
         let mut inputs = vec![];
@@ -212,25 +214,27 @@ impl Operation {
             }
         }
         match function {
-            Function::Rename => panic!("Please use rename function directly for now"),
-            Function::Cast => unimplemented!("cast op"),
-            Function::Scalar(s) => {
+            Rename => panic!("Please use rename function directly for now"),
+            Cast => unimplemented!("cast op"),
+            Scalar(s) => {
                 use ScalarFunction::*;
                 let operations = match s {
                     ScalarFunction::Abs => panic!(),
-                    ScalarFunction::Add => crate::operation::AddOperation::transform(
+                    ScalarFunction::Add => crate::operation::scalar::AddOperation::transform(
                         inputs,
                         out_col_name,
                         out_col_type,
                     )?,
-                    ScalarFunction::Subtract => crate::operation::SubtractOperation::transform(
-                        inputs,
-                        out_col_name,
-                        out_col_type,
-                    )?,
+                    ScalarFunction::Subtract => {
+                        crate::operation::scalar::SubtractOperation::transform(
+                            inputs,
+                            out_col_name,
+                            out_col_type,
+                        )?
+                    }
                     ScalarFunction::Multiply => panic!(),
                     ScalarFunction::Divide => panic!(),
-                    ScalarFunction::Sine => crate::operation::SinOperation::transform(
+                    ScalarFunction::Sine => crate::operation::scalar::SinOperation::transform(
                         inputs,
                         out_col_name,
                         out_col_type,
@@ -246,7 +250,9 @@ impl Operation {
                     .map(|op| Transformation::Calculate(op))
                     .collect())
             }
-            Function::Array(a) => unimplemented!("array op"),
+            Array(a) => unimplemented!("array op"),
+            Limit(limit) => Ok(vec![Transformation::Limit(limit)]),
+            Filter(cond) => Ok(vec![Transformation::Filter(cond)]),
         }
     }
 }
@@ -373,7 +379,7 @@ impl Computation {
                 }
             }
             2 => panic!("two input transformations aren't supported yet"),
-            _ => panic!("unsuported number of input datasets: {}", inputs.len()),
+            _ => panic!("unsupported number of input datasets: {}", inputs.len()),
         }
         Self {
             input: inputs,
@@ -389,6 +395,8 @@ pub enum Function {
     Array(ArrayFunction),
     Cast,
     Rename,
+    Filter(BooleanFilter),
+    Limit(usize),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -424,6 +432,142 @@ pub enum ArrayFunction {
     Zip,
     CollectList,
     CollectSet,
+}
+
+// TODO: This is a temporary work-around until there are scalars in Arrow
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum Scalar {
+    Null,
+    Int32(i32),
+    Int64(i64),
+    Float32(f32),
+    Float64(f64),
+    Boolean(bool),
+    String(String),
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum BooleanInput {
+    Scalar(Scalar),
+    Column(Column),
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum BooleanFilter {
+    Input(BooleanInput),
+    Not(Box<BooleanFilter>),
+    And(Box<BooleanFilter>, Box<BooleanFilter>),
+    Or(Box<BooleanFilter>, Box<BooleanFilter>),
+    Gt(Box<BooleanFilter>, Box<BooleanFilter>),
+    Ge(Box<BooleanFilter>, Box<BooleanFilter>),
+    Eq(Box<BooleanFilter>, Box<BooleanFilter>),
+    Ne(Box<BooleanFilter>, Box<BooleanFilter>),
+    Lt(Box<BooleanFilter>, Box<BooleanFilter>),
+    Le(Box<BooleanFilter>, Box<BooleanFilter>),
+}
+
+impl BooleanFilter {
+    pub fn eval_to_array(
+        &self,
+        batch: &arrow::record_batch::RecordBatch,
+    ) -> Result<arrow::array::ArrayRef, ArrowError> {
+        use ::std::sync::Arc;
+        use arrow::array::*;
+        use BooleanFilter::*;
+        let len = batch.num_rows();
+        match self {
+            // either extract a column or create a scalar with batch length
+            Input(input) => match input {
+                BooleanInput::Scalar(scalar) => match scalar {
+                    Scalar::Boolean(v) => {
+                        Ok(Arc::new(arrow::array::BooleanArray::from(vec![*v; len])) as ArrayRef)
+                    }
+                    Scalar::Float32(v) => {
+                        Ok(Arc::new(arrow::array::Float32Array::from(vec![*v; len])) as ArrayRef)
+                    }
+                    Scalar::Float64(v) => {
+                        Ok(Arc::new(arrow::array::Float64Array::from(vec![*v; len])) as ArrayRef)
+                    }
+                    Scalar::Int32(v) => {
+                        Ok(Arc::new(arrow::array::Int32Array::from(vec![*v; len])) as ArrayRef)
+                    }
+                    Scalar::Int64(v) => {
+                        Ok(Arc::new(arrow::array::Int64Array::from(vec![*v; len])) as ArrayRef)
+                    }
+                    Scalar::Null => {
+                        Ok(Arc::new(arrow::array::BooleanArray::from(vec![false; len]))
+                            as ArrayRef)
+                    }
+                    Scalar::String(v) => {
+                        Ok(
+                            Arc::new(arrow::array::BinaryArray::from(vec![v.as_str(); len]))
+                                as ArrayRef,
+                        )
+                    }
+                },
+                BooleanInput::Column(column) => {
+                    let col = batch.schema().column_with_name(&column.name);
+                    match col {
+                        Some((num, field)) => {
+                            let col = batch.column(num);
+                            return Ok(col.clone());
+                        }
+                        None => {
+                            return Err(ArrowError::InvalidArgumentError(format!(
+                                "Cannot find column {}",
+                                &column.name
+                            )));
+                        }
+                    }
+                }
+            },
+            Not(ref array) => {
+                let a = arrow::compute::cast(&array.eval_to_array(batch)?, &DataType::Boolean)?;
+                Ok(Arc::new(arrow::compute::not(&BooleanArray::from(a.data()))?) as ArrayRef)
+            }
+            And(ref left, ref right) | Or(ref left, ref right) => {
+                let l = arrow::compute::cast(&left.eval_to_array(batch)?, &DataType::Float64)?;
+                let r = arrow::compute::cast(&right.eval_to_array(batch)?, &DataType::Float64)?;
+                let op = match self {
+                    And(_, _) => arrow::compute::and,
+                    Or(_, _) => arrow::compute::or,
+                    _ => unreachable!(),
+                };
+                Ok(Arc::new(op(
+                    &BooleanArray::from(l.data()),
+                    &BooleanArray::from(r.data()),
+                )?) as ArrayRef)
+            }
+            Gt(ref left, ref right)
+            | Ge(ref left, ref right)
+            | Eq(ref left, ref right)
+            | Ne(ref left, ref right)
+            | Lt(ref left, ref right)
+            | Le(ref left, ref right) => {
+                // cast arrays to compatible types, then calculate `gt`
+                // TODO determine types to cast to, using f64 for expediency
+                let l = arrow::compute::cast(&left.eval_to_array(batch)?, &DataType::Float64)?;
+                let r = arrow::compute::cast(&right.eval_to_array(batch)?, &DataType::Float64)?;
+                let op = match self {
+                    Gt(_, _) => arrow::compute::gt,
+                    Ge(_, _) => arrow::compute::gt_eq,
+                    Eq(_, _) => arrow::compute::eq,
+                    Ne(_, _) => arrow::compute::neq,
+                    Lt(_, _) => arrow::compute::lt,
+                    Le(_, _) => arrow::compute::lt_eq,
+                    _ => unreachable!(),
+                };
+                Ok(Arc::new(op(
+                    &Float64Array::from(l.data()),
+                    &Float64Array::from(r.data()),
+                )?) as ArrayRef)
+            }
+        }
+    }
+}
+
+pub trait BooleanFilterEval {
+    fn eval(&self, filter: BooleanFilter) -> arrow::array::BooleanArray;
 }
 
 #[cfg(test)]

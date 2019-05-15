@@ -1,4 +1,4 @@
-//! Operations
+//! Scalar Operations
 
 use crate::evaluation::*;
 use crate::expression::*;

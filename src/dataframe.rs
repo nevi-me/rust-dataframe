@@ -1,3 +1,4 @@
+use crate::expression::{BooleanFilter, BooleanFilterEval, BooleanInput};
 use crate::table::Column;
 use crate::utils;
 use arrow::array;
@@ -150,7 +151,7 @@ impl DataFrame {
 
     /// Returns dataframe with the first n records selected
     pub fn take(&self, count: usize) -> Self {
-        DataFrame::new(
+        Self::new(
             self.schema.clone(),
             self.columns
                 .clone()
@@ -159,8 +160,24 @@ impl DataFrame {
                 .collect(),
         )
     }
+
+    /// Alias for `Self::take`
     pub fn limit(&self, count: usize) -> Self {
         self.take(count)
+    }
+
+    /// Filter the dataframe
+    pub fn filter(&self, condition: &BooleanFilter) -> Self {
+        // create boolean array to filter with
+        let mask = self.evaluate_boolean_filter(condition).unwrap();
+        Self::new(
+            self.schema.clone(),
+            self.columns
+                .clone()
+                .into_iter()
+                .map(|col| col.filter(&mask))
+                .collect(),
+        )
     }
 
     fn intersect(&self, other: &DataFrame) -> Self {
@@ -431,8 +448,26 @@ impl DataFrame {
             .clone()
             .into()
     }
+
+    fn evaluate_boolean_filter(
+        &self,
+        filter: &BooleanFilter,
+    ) -> Result<crate::table::Column, ArrowError> {
+        // create a new column with filter
+        let bools: Result<Vec<ArrayRef>, ArrowError> = self
+            .to_record_batches()
+            .iter()
+            .map(|batch| filter.eval_to_array(batch))
+            .collect();
+        let column = crate::table::Column::from_arrays(
+            bools?,
+            Field::new("bool_filter", DataType::Boolean, true),
+        );
+        Ok(column)
+    }
 }
 
+#[cfg(test)]
 mod tests {
     use crate::dataframe::DataFrame;
     use crate::functions::scalar::ScalarFunctions;

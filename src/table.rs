@@ -65,6 +65,7 @@ impl ChunkedArray {
     fn slice(&self, offset: usize, length: Option<usize>) -> Self {
         let mut offset = offset;
         let mut length = length.unwrap_or(std::usize::MAX);
+        length = std::cmp::min(length, self.num_rows());
         let mut current_chunk: usize = 0;
         let mut new_chunks: Vec<ArrayRef> = vec![];
         // compute the first offset. If offset > whole chunks' lengths, skip those chunks
@@ -74,11 +75,23 @@ impl ChunkedArray {
         }
         while current_chunk < self.num_chunks() && length > 0 {
             new_chunks.push(self.chunk(current_chunk).slice(offset, length));
-            length -= self.chunk(current_chunk).len() - offset;
+            length -= std::cmp::min(length, self.chunk(current_chunk).len() - offset);
             offset = 0;
             current_chunk += 1;
         }
         Self::from_arrays(new_chunks)
+    }
+
+    fn filter(&self, condition: &Self) -> Self {
+        let filtered: Result<Vec<ArrayRef>, arrow::error::ArrowError> = self
+            .chunks()
+            .into_iter()
+            .zip(condition.chunks())
+            .map(|(a, b): (&ArrayRef, &ArrayRef)| {
+                arrow::compute::filter(a.as_ref(), &BooleanArray::from(b.data()))
+            })
+            .collect();
+        Self::from_arrays(filtered.unwrap())
     }
 
     fn flatten(&self) {
@@ -156,6 +169,11 @@ impl Column {
         self.data().num_rows()
     }
 
+    /// Filter this column using a Boolean column as the mask
+    pub fn filter(&self, condition: &Self) -> Self {
+        Self::from_chunked_array(self.data.filter(condition.data()), self.field.clone())
+    }
+
     fn flatten() {}
 }
 
@@ -227,7 +245,7 @@ impl Table {
     /// Construct a `Table` from a sequence of `Column`s and a schema
     fn make(columns: Vec<Column>) -> Self {
         let fields: Vec<Field> = columns.iter().map(|column| column.field.clone()).collect();
-        Table {
+        Self {
             schema: Arc::new(Schema::new(fields)),
             columns,
         }
@@ -236,18 +254,30 @@ impl Table {
     /// Construct a `Table` from a sequence of `Column`s and a schema
     fn make_with_schema(schema: Arc<Schema>, columns: Vec<Column>) -> Self {
         // TODO validate that schema and columns match
-        Table { schema, columns }
+        Self { schema, columns }
     }
 
     /// Slice the table from an offset
     pub fn slice(&self, offset: usize, limit: usize) -> Self {
-        Table {
+        Self {
             schema: self.schema.clone(),
             columns: self
                 .columns
                 .clone()
                 .into_iter()
                 .map(|col| col.slice(offset, Some(limit)))
+                .collect(),
+        }
+    }
+
+    pub fn filter(&self, condition: &Column) -> Self {
+        Self {
+            schema: self.schema.clone(),
+            columns: self
+                .columns
+                .clone()
+                .into_iter()
+                .map(|col| col.filter(condition))
                 .collect(),
         }
     }

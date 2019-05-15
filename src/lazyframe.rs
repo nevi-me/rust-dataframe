@@ -116,8 +116,36 @@ impl LazyFrame {
         }
     }
 
+    /// Limit data to the specified number of records.
+    ///
+    /// If the specified limit is greater than the total records, the total records are returned
     pub fn limit(&self, limit: usize) -> Self {
-        unimplemented!()
+        let computation = Computation {
+            input: vec![self.output.clone()],
+            transformations: vec![Transformation::Limit(limit)],
+            output: self.output.clone(),
+        };
+        let expression = Expression::Compute(Box::new(self.expression.clone()), computation);
+        Self {
+            id: "limited_frame".to_owned(),
+            expression,
+            output: self.output.clone(),
+        }
+    }
+
+    /// Apply a filter using a `BooleanFilter` which evaluates to a `BooleanArray`
+    pub fn filter(&self, condition: BooleanFilter) -> Self {
+        let computation = Computation {
+            input: vec![self.output.clone()],
+            transformations: vec![Transformation::Filter(condition)],
+            output: self.output.clone(),
+        };
+        let expression = Expression::Compute(Box::new(self.expression.clone()), computation);
+        Self {
+            id: "filtered_frame".to_owned(),
+            expression,
+            output: self.output.clone(),
+        }
     }
 
     /// project columns
@@ -174,6 +202,6 @@ mod tests {
                 None,
             )
             .unwrap();
-        dbg!(frame);
+        dbg!(frame.expression.unroll());
     }
 }
