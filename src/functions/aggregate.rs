@@ -29,20 +29,40 @@ impl AggregateFunctions {
             .map(|array| compute::max(array).unwrap())
             .max()
     }
-    // pub fn avg<T>(array: &PrimitiveArray<T>) -> Option<f64>
-    // where
-    //     T: ArrowNumericType
-    // {
-    //     let sum = compute::sum(array);
-    //     match sum {
-    //         None => None,
-    //         Some(sum) => {
-    //             let count = AggregateFunctions::count(array).unwrap();
-    //             let sum = sum as f64;
-    //             Some(sum / count as f64)
-    //         }
-    //     }
-    // }
+    pub fn avg<T>(arrays: Vec<&PrimitiveArray<T>>) -> Option<f64>
+    where
+        T: ArrowNumericType,
+        f64: From<T::Native>,
+    {
+        let mut mean = 0.0f64;
+        let mut count = 0;
+        let batch_means: Vec<(f64, usize)> = arrays
+            .iter()
+            .map(|array| {
+                let mut m = 0.0f64;
+                let mut nulls = 0;
+                let a = PrimitiveArray::<T>::from(array.data());
+                for i in 0..array.len() {
+                    if a.is_valid(i) {
+                        m = m + (f64::from(a.value(i)) - m) / ((i + 1 - nulls) as f64);
+                    } else {
+                        nulls += 1;
+                    }
+                }
+                // return mean and non-null count
+                (m, array.len() - nulls)
+            })
+            .collect();
+        for (m, len) in batch_means {
+            count += len;
+            mean = mean + ((m - mean) * len as f64) / (count as f64);
+        }
+        if count == 0 {
+            None
+        } else {
+            Some(mean)
+        }
+    }
 
     /// Count returns the number of non-null values in the array/column.
     ///
@@ -104,5 +124,24 @@ mod tests {
         let a = Int32Array::from(vec![5, 6, 7, 8, 9]);
         let c = AggregateFunctions::count(vec![&a]).unwrap();
         assert_eq!(5, c);
+    }
+
+    #[test]
+    fn test_aggregate_mean() {
+        let a = Int32Array::from(vec![0, 1, 2, 3, 4]);
+        let b = Int32Array::from(vec![5, 6, 7, 8, 9]);
+        let c = AggregateFunctions::avg(vec![&a, &b]);
+        assert_eq!(Some(4.5), c);
+        let d = Int32Array::from(vec![
+            Some(0),
+            None,
+            Some(1),
+            None,
+            Some(2),
+            Some(3),
+            Some(4),
+        ]);
+        let e = AggregateFunctions::avg(vec![&d, &b]);
+        assert_eq!(Some(4.5), e);
     }
 }
