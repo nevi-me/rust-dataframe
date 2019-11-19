@@ -1,10 +1,10 @@
 //! Expressions that generate operations and computations
 
 use crate::io::datasource::DataSourceEval;
-use ::std::sync::Arc;
 use arrow::datatypes::DataType;
 use arrow::error::ArrowError;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum ColumnType {
@@ -31,6 +31,9 @@ impl From<ColumnType> for DataType {
     }
 }
 
+/// A column is an expression of an Arrow `Field`, excluding metadata about nullability
+///
+/// Columns can be converted to and from `Field`, with the `Field::nullable()` data lost
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Column {
     pub(crate) name: String,
@@ -52,6 +55,7 @@ impl From<Column> for arrow::datatypes::Field {
     }
 }
 
+/// A Dataset is typed metadata representing how a table/dataframe looks like
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Dataset {
     pub(crate) name: String,
@@ -94,11 +98,13 @@ impl Dataset {
     }
 }
 
+/// Transformations perform some calculation on a single data set
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Transformation {
     Aggregate,
     Calculate(Operation),
-    Join(Dataset, Dataset, JoinCriteria),
+    // defines the 2 input datasets that are transformed during a join
+    // Join(Dataset, Dataset),
     Group,
     Project,
     Read(Reader),
@@ -261,6 +267,7 @@ impl Operation {
 pub enum Expression {
     Read(Computation),
     Compute(Box<Expression>, Computation),
+    Join(Box<Expression>, Box<Expression>, JoinCriteria),
     Write(Box<Expression>),
     Output,
 }
@@ -276,6 +283,9 @@ impl Expression {
             Expression::Compute(expr, c) => {
                 computations.push(c.clone());
                 computations.append(&mut expr.unroll());
+            }
+            Expression::Join(expr1, expr2, _) => {
+                unimplemented!("Join is currently not implemented")
             }
             Expression::Write(expr) => computations.append(&mut expr.unroll()),
             Expression::Output => {}
@@ -471,8 +481,8 @@ impl BooleanFilter {
         &self,
         batch: &arrow::record_batch::RecordBatch,
     ) -> Result<arrow::array::ArrayRef, ArrowError> {
-        use ::std::sync::Arc;
         use arrow::array::*;
+        use std::sync::Arc;
         use BooleanFilter::*;
         let len = batch.num_rows();
         match self {
@@ -500,7 +510,7 @@ impl BooleanFilter {
                     }
                     Scalar::String(v) => {
                         Ok(
-                            Arc::new(arrow::array::BinaryArray::from(vec![v.as_str(); len]))
+                            Arc::new(arrow::array::StringArray::from(vec![v.as_str(); len]))
                                 as ArrayRef,
                         )
                     }

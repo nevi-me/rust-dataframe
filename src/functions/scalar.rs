@@ -1,10 +1,10 @@
 use arrow::array::*;
-use arrow::builder::*;
 use arrow::compute;
 use arrow::datatypes::*;
 use arrow::error::ArrowError;
-use num::{abs, Signed, Zero};
+use num::{abs, One, Signed, Zero};
 use num_traits::Float;
+use rayon::prelude::*;
 use std::{ops::Add, ops::Div, ops::Mul, ops::Sub};
 
 extern crate test;
@@ -25,8 +25,8 @@ impl ScalarFunctions {
             + Div<Output = T::Native>
             + Zero,
     {
-        left.iter()
-            .zip(right.iter())
+        left.par_iter()
+            .zip(right.par_iter())
             .map(|(a, b)| compute::add(a, b).into())
             .collect()
     }
@@ -58,7 +58,8 @@ impl ScalarFunctions {
             + Sub<Output = T::Native>
             + Mul<Output = T::Native>
             + Div<Output = T::Native>
-            + Zero,
+            + Zero
+            + One,
     {
         left.iter()
             .zip(right.iter())
@@ -79,6 +80,24 @@ impl ScalarFunctions {
     {
         left.iter()
             .zip(right.iter())
+            .map(|(a, b)| compute::multiply(a, b).into())
+            .collect()
+    }
+
+    pub fn par_multiply<T>(
+        left: Vec<&PrimitiveArray<T>>,
+        right: Vec<&PrimitiveArray<T>>,
+    ) -> Result<Vec<PrimitiveArray<T>>, ArrowError>
+    where
+        T: ArrowNumericType,
+        T::Native: Add<Output = T::Native>
+            + Sub<Output = T::Native>
+            + Mul<Output = T::Native>
+            + Div<Output = T::Native>
+            + Zero,
+    {
+        left.par_iter()
+            .zip(right.par_iter())
             .map(|(a, b)| compute::multiply(a, b).into())
             .collect()
     }
@@ -293,19 +312,16 @@ impl ScalarFunctions {
     {
         scalar_op(array, |array| Ok(num::Float::log2(array)))
     }
-    pub fn lower(arrays: Vec<&BinaryArray>) -> Result<Vec<BinaryArray>, ArrowError> {
+    pub fn lower(arrays: Vec<&StringArray>) -> Result<Vec<StringArray>, ArrowError> {
         arrays
             .iter()
             .map(|array| {
-                let mut b = BinaryBuilder::new(array.len());
+                let mut b = StringBuilder::new(array.len());
                 for i in 0..array.len() {
                     if array.is_null(i) {
                         b.append(false)?
                     } else {
-                        match &::std::str::from_utf8(array.value(i)) {
-                            Ok(string) => b.append_string(&string.to_lowercase())?,
-                            _ => b.append(false)?,
-                        }
+                        b.append_value(&array.value(i).to_lowercase())?;
                     }
                 }
                 Ok(b.finish())
@@ -313,7 +329,7 @@ impl ScalarFunctions {
             .collect()
     }
     pub fn lpad() {}
-    pub fn ltrim(array: Vec<&BinaryArray>) -> Result<Vec<BinaryArray>, ArrowError> {
+    pub fn ltrim(array: Vec<&StringArray>) -> Result<Vec<StringArray>, ArrowError> {
         array
             .iter()
             .map(|a| string_op(a, |a| Ok(str::trim_start(a))))
@@ -361,7 +377,7 @@ impl ScalarFunctions {
         scalar_op(array, |array| Ok(num::Float::round(array)))
     }
     fn rpad() {}
-    pub fn rtrim(array: Vec<&BinaryArray>) -> Result<Vec<BinaryArray>, ArrowError> {
+    pub fn rtrim(array: Vec<&StringArray>) -> Result<Vec<StringArray>, ArrowError> {
         array
             .iter()
             .map(|a| string_op(a, |a| Ok(str::trim_end(a))))
@@ -409,20 +425,15 @@ impl ScalarFunctions {
         scalar_op(array, |array| Ok(num::Float::sqrt(array)))
     }
     fn r#struct() {}
-    fn substring(array: &BinaryArray, pos: usize, len: usize) -> Result<BinaryArray, ArrowError> {
-        let mut b = BinaryBuilder::new(array.len());
+    fn substring(array: &StringArray, pos: usize, len: usize) -> Result<StringArray, ArrowError> {
+        let mut b = StringBuilder::new(array.len());
         for i in 0..array.len() {
             let index = i;
             if array.is_null(i) {
                 b.append(false)?;
             } else {
-                match &::std::str::from_utf8(array.value(i)) {
-                    Ok(string) => {
-                        let s: String = string.chars().skip(pos).take(len).collect();
-                        b.append_string(&s)?
-                    }
-                    _ => b.append(false)?,
-                }
+                let s: String = array.value(i).chars().skip(pos).take(len).collect();
+                b.append_value(&s)?
             }
         }
         Ok(b.finish())
@@ -450,7 +461,7 @@ impl ScalarFunctions {
     fn to_timestamp() {}
     fn to_utc_timestamp() {}
     fn translate() {}
-    pub fn trim(array: Vec<&BinaryArray>) -> Result<Vec<BinaryArray>, ArrowError> {
+    pub fn trim(array: Vec<&StringArray>) -> Result<Vec<StringArray>, ArrowError> {
         array
             .iter()
             .map(|a| string_op(a, |a| Ok(str::trim(a))))
@@ -460,19 +471,16 @@ impl ScalarFunctions {
     fn unbase64() {}
     fn unhex() {}
     fn unix_timestamp() {}
-    pub fn upper(arrays: Vec<&BinaryArray>) -> Result<Vec<BinaryArray>, ArrowError> {
+    pub fn upper(arrays: Vec<&StringArray>) -> Result<Vec<StringArray>, ArrowError> {
         arrays
             .iter()
             .map(|array| {
-                let mut b = BinaryBuilder::new(array.len());
+                let mut b = StringBuilder::new(array.len());
                 for i in 0..array.len() {
                     if array.is_null(i) {
                         b.append(false)?
                     } else {
-                        match &::std::str::from_utf8(array.value(i)) {
-                            Ok(string) => b.append_string(&string.to_uppercase())?,
-                            _ => b.append(false)?,
-                        }
+                        b.append_value(&array.value(i).to_uppercase())?
                     }
                 }
                 Ok(b.finish())
@@ -531,20 +539,17 @@ where
     Ok(b.finish())
 }
 
-fn string_op<F>(array: &BinaryArray, op: F) -> Result<BinaryArray, ArrowError>
+fn string_op<F>(array: &StringArray, op: F) -> Result<StringArray, ArrowError>
 where
     F: Fn(&str) -> Result<&str, ArrowError>,
 {
-    let mut b = BinaryBuilder::new(array.len());
+    let mut b = StringBuilder::new(array.len());
     for i in 0..array.len() {
         let index = i;
         if array.is_null(i) {
             b.append(false)?;
         } else {
-            match &::std::str::from_utf8(array.value(i)) {
-                Ok(string) => b.append_string(op(string)?)?,
-                _ => b.append(false)?,
-            }
+            b.append_value(op(array.value(i))?)?;
         }
     }
     Ok(b.finish())
@@ -598,24 +603,122 @@ mod tests {
 
     #[test]
     fn test_str_upper_and_lower() {
-        let mut builder = BinaryBuilder::new(14);
-        builder.append_string("Hello").unwrap();
-        builder.append_string("Arrow").unwrap();
-        builder.append_string("农历新年").unwrap();
+        let mut builder = StringBuilder::new(14);
+        builder.append_value("Hello").unwrap();
+        builder.append_value("Arrow").unwrap();
+        builder.append_value("农历新年").unwrap();
         let array = builder.finish();
         let lower = ScalarFunctions::lower(vec![&array]).unwrap();
-        assert_eq!("hello", lower[0].get_string(0));
-        assert_eq!("arrow", lower[0].get_string(1));
-        assert_eq!("农历新年", lower[0].get_string(2));
+        assert_eq!("hello", lower[0].value(0));
+        assert_eq!("arrow", lower[0].value(1));
+        assert_eq!("农历新年", lower[0].value(2));
         let upper = ScalarFunctions::upper(vec![&array]).unwrap();
-        assert_eq!("HELLO", upper[0].get_string(0));
-        assert_eq!("ARROW", upper[0].get_string(1));
-        assert_eq!("农历新年", upper[0].get_string(2));
+        assert_eq!("HELLO", upper[0].value(0));
+        assert_eq!("ARROW", upper[0].value(1));
+        assert_eq!("农历新年", upper[0].value(2));
     }
 
     #[bench]
     fn bench_multiply_i32(b: &mut Bencher) {
         let a = Int32Array::from(vec![None, Some(200), None, Some(-256), None]);
-        b.iter(|| ScalarFunctions::multiply::<Int32Type>(vec![&a], vec![&a]).unwrap());
+        b.iter(|| {
+            ScalarFunctions::par_multiply::<Int32Type>(
+                vec![
+                    &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+                    &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+                    &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+                    &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+                    &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+                    &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+                    &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+                    &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+                    &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+                    &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+                    &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+                    &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+                    &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+                    &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+                    &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+                    &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+                    &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+                    &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+                    &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+                ],
+                vec![
+                    &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+                    &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+                    &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+                    &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+                    &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+                    &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+                    &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+                    &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+                    &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+                    &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+                    &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+                    &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+                    &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+                    &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+                    &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+                    &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+                    &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+                    &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+                    &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+                ],
+            )
+            .unwrap()
+        });
     }
+
+    // #[bench]
+    // fn bench_par_multiply_i32(b: &mut Bencher) {
+    //     let a = Int32Array::from(vec![None, Some(200), None, Some(-256), None]);
+    //     b.iter(|| {
+    //         ScalarFunctions::par_multiply::<Int32Type>(
+    //             vec![
+    //                 &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+    //                 &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+    //                 &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+    //                 &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+    //                 &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+    //                 &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+    //                 &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+    //                 &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+    //                 &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+    //                 &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+    //                 &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+    //                 &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+    //                 &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+    //                 &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+    //                 &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+    //                 &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+    //                 &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+    //                 &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+    //                 &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+    //             ],
+    //             vec![
+    //                 &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+    //                 &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+    //                 &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+    //                 &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+    //                 &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+    //                 &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+    //                 &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+    //                 &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+    //                 &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+    //                 &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+    //                 &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+    //                 &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+    //                 &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+    //                 &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+    //                 &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+    //                 &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+    //                 &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+    //                 &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+    //                 &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a, &a,
+    //             ],
+    //         )
+    //         .unwrap()
+    //     });
+    // }
 }

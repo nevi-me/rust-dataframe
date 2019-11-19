@@ -69,7 +69,7 @@ impl Evaluate for DataFrame {
                     Aggregate => panic!("aggregations not supported"),
                     Calculate(operation) => frame.calculate(&operation),
                     Group => panic!(),
-                    Join(_, _, _) => panic!(),
+                    // Join(_, _, _) => panic!(),
                     Project => panic!(),
                     Read(reader) => Self::read(&reader),
                     Filter(cond) => frame.filter(cond),
@@ -409,4 +409,7 @@ mod tests {
         dataframe.to_csv("./target/test_output.csv").unwrap();
         assert_eq!(25, dataframe.num_rows());
     }
+
+    #[test]
+    fn test_join() {}
 }

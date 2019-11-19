@@ -1,6 +1,6 @@
 //! An experimental interface for reading and writing record batches to and from PostgreSQL
 
-use arrow::builder::*;
+use arrow::array::*;
 use arrow::datatypes::{DataType, Field, Schema, TimeUnit};
 use arrow::record_batch::RecordBatch;
 use chrono::Timelike;
@@ -152,10 +152,10 @@ pub fn read_table(
                     }
                 }
                 DataType::Utf8 => {
-                    let field_builder = builder.field_builder::<BinaryBuilder>(j).unwrap();
+                    let field_builder = builder.field_builder::<StringBuilder>(j).unwrap();
                     for i in 0..chunk.len() {
                         let row: &Row = chunk.get(i).unwrap();
-                        field_builder.append_string(row.get(j)).unwrap();
+                        field_builder.append_value(row.get(j)).unwrap();
                     }
                 }
                 t @ _ => panic!("Field builder for {:?} not yet supported", t),

@@ -1,8 +1,6 @@
 use crate::table::Column;
 use arrow::array;
-use arrow::array::{Array, ArrayRef};
-// use arrow::array_data::ArrayDataBuilder;
-use arrow::array_data::ArrayDataRef;
+use arrow::array::{Array, ArrayRef, ArrayDataRef};
 use arrow::datatypes::*;
 use std::sync::Arc;
 
@@ -21,7 +19,7 @@ pub fn make_array(data: ArrayDataRef) -> ArrayRef {
         DataType::UInt64 => Arc::new(array::UInt64Array::from(data)) as ArrayRef,
         DataType::Float32 => Arc::new(array::Float32Array::from(data)) as ArrayRef,
         DataType::Float64 => Arc::new(array::Float64Array::from(data)) as ArrayRef,
-        DataType::Utf8 => Arc::new(array::BinaryArray::from(data)) as ArrayRef,
+        DataType::Utf8 => Arc::new(array::StringArray::from(data)) as ArrayRef,
         DataType::List(_) => Arc::new(array::ListArray::from(data)) as ArrayRef,
         DataType::Struct(_) => Arc::new(array::StructArray::from(data)) as ArrayRef,
         dt => panic!("Unexpected data type {:?}", dt),

@@ -2,9 +2,7 @@ use crate::expression::{BooleanFilter, BooleanFilterEval, BooleanInput};
 use crate::table::Column;
 use crate::utils;
 use arrow::array;
-use arrow::array::{Array, ArrayRef, UInt64Array};
-use arrow::array_data::ArrayDataBuilder;
-use arrow::array_data::ArrayDataRef;
+use arrow::array::{Array, ArrayDataBuilder, ArrayDataRef, ArrayRef, UInt64Array};
 use arrow::csv::Reader as CsvReader;
 use arrow::csv::ReaderBuilder as CsvReaderBuilder;
 use arrow::datatypes::*;
@@ -36,7 +34,7 @@ impl DataFrame {
         DataFrame { schema, columns }
     }
 
-    fn from_arrays(schema: Arc<Schema>, arrays: Vec<Arc<Array>>) -> Self {
+    fn from_arrays(schema: Arc<Schema>, arrays: Vec<Arc<dyn Array>>) -> Self {
         let columns = arrays
             .into_iter()
             .enumerate()
@@ -445,12 +443,12 @@ impl DataFrame {
 
         let file = File::create(path)?;
 
-        let wrt = Writer::new(file);
+        let mut wrt = Writer::new(file);
 
         let batches = self.to_record_batches();
-        let batches_ref: Vec<&RecordBatch> = batches.iter().map(|b| b).collect();
+        let results: Result<Vec<_>, ArrowError> = batches.iter().map(|b| wrt.write(b)).collect();
 
-        wrt.write(batches_ref)?;
+        results?;
 
         Ok(())
     }
@@ -548,13 +546,12 @@ mod tests {
             format!("{:?}", BooleanArray::from(col_2.data().chunks()[0].data()))
         );
         assert_eq!(
-            "PrimitiveArray<Int64>\n[\n  12345676354674,\n]",
+            "PrimitiveArray<Int64>\n[\n  null,\n]",
             format!("{:?}", Int64Array::from(col_3.data().chunks()[0].data()))
         );
         assert_eq!(
             "lorem ipsum",
-            std::str::from_utf8(BinaryArray::from(col_4.data().chunks()[0].data()).value(0))
-                .unwrap()
+            StringArray::from(col_4.data().chunks()[0].data()).value(0)
         );
         assert_eq!(
             "PrimitiveArray<Timestamp(Millisecond)>\n[\n  2019-04-19T10:41:13.591,\n]",
@@ -648,7 +645,7 @@ mod tests {
         );
 
         let city = dataframe.column_by_name("city");
-        let lowercase = ScalarFunctions::lower(col_to_binary_arrays(city));
+        let lowercase = ScalarFunctions::lower(col_to_string_arrays(city));
         let lowercase: Vec<ArrayRef> = lowercase
             .unwrap()
             .into_iter()
@@ -684,7 +681,7 @@ mod tests {
         );
 
         let city = dataframe.column_by_name("city");
-        let lowercase = ScalarFunctions::lower(col_to_binary_arrays(city));
+        let lowercase = ScalarFunctions::lower(col_to_string_arrays(city));
         let lowercase: Vec<ArrayRef> = lowercase
             .unwrap()
             .into_iter()

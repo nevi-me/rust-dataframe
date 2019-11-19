@@ -32,6 +32,7 @@
 //!     .unwrap();
 //! ```
 
+use crate::dataframe::DataFrame;
 use std::fs::File;
 use std::io::{BufReader, Read, Seek, SeekFrom, Write};
 use std::sync::Arc;
@@ -39,9 +40,7 @@ use std::sync::Arc;
 use byteorder::{LittleEndian, WriteBytesExt};
 
 use arrow::array::*;
-use arrow::array_data::ArrayDataBuilder;
 use arrow::buffer::Buffer;
-use arrow::builder::BinaryBuilder;
 use arrow::datatypes::*;
 use arrow::error::{ArrowError, Result};
 use arrow::record_batch::RecordBatch;
@@ -105,6 +104,7 @@ fn get_fbs_type(dtype: DataType) -> fbs::Type {
         Interval(_) => unimplemented!("Interval type not supported"),
         Utf8 => UTF8,
         List(_) | Struct(_) => unimplemented!("Lists and Structs types are not supported"),
+        t @ _ => unimplemented!("Type {:?} not supported", t),
     }
 }
 
@@ -267,7 +267,7 @@ impl<R: Read + Seek> FeatherReader<R> {
                         .collect();
 
                     // create an array of strings
-                    let mut builder = BinaryBuilder::new(num_rows as usize * 100); // TODO get the exact size
+                    let mut builder = StringBuilder::new(num_rows as usize * 100); // TODO get the exact size
                     for i in (0..value_buffer.len()).step_by(value_width as usize) {
                         let index = match value_width {
                             1 => i as usize,
@@ -278,7 +278,7 @@ impl<R: Read + Seek> FeatherReader<R> {
                             }
                             _ => panic!(format!("Unsupported length {}", value_width)),
                         };
-                        builder.append_string(&strings[index]).unwrap()
+                        builder.append_value(&strings[index]).unwrap()
                     }
 
                     let arr = builder.finish();
@@ -365,7 +365,7 @@ impl<R: Read + Seek> FeatherReader<R> {
                             .null_count(array.null_count() as usize)
                             .build();
 
-                        Arc::new(BinaryArray::from(array_data))
+                        Arc::new(StringArray::from(array_data))
                     } else {
                         let mut buffer = Vec::with_capacity(total_bytes as usize);
                         self.reader.seek(SeekFrom::Start(offset as u64)).unwrap();
@@ -556,6 +556,12 @@ impl FeatherWriter for RecordBatch {
                         "Date and time formats currently not supported by Rust Arrow".to_string(),
                     ));
                 }
+                t @ _ => {
+                    return Err(ArrowError::IoError(format!(
+                        "Data format {:?} currently not supported by Rust Arrow",
+                        t
+                    )));
+                }
             }
         }
 
@@ -584,6 +590,201 @@ impl FeatherWriter for RecordBatch {
         Ok(())
     }
 }
+
+// impl FeatherWriter for DataFrame {
+//     fn write_feather(&self, path: &str) -> Result<()> {
+//         let mut file: File = File::create(path)?;
+//         file.write(&FEATHER_MAGIC)?;
+//         file.write(&[0, 0, 0, 0])?;
+
+//         let num_records = self.num_rows();
+
+//         let schema = self.schema();
+//         let mut builder = flatbuffers::FlatBufferBuilder::new_with_capacity(256);
+
+//         // set the offset as 8, which is 4 bytes for the header, and 4 bytes for padding
+//         let mut current_offset = 8;
+//         let mut fbs_cols = vec![];
+
+//         for i in 0..self.num_columns() {
+//             // create metadata for each column, write column data to file
+//             let column = self.column(i);
+//             match column.data_type() {
+//                 DataType::Boolean
+//                 | DataType::Int8
+//                 | DataType::Int16
+//                 | DataType::Int32
+//                 | DataType::Int64
+//                 | DataType::UInt8
+//                 | DataType::UInt16
+//                 | DataType::UInt32
+//                 | DataType::UInt64
+//                 | DataType::Float32
+//                 | DataType::Float64 => {
+//                     // create primitive array
+//                     let col_name = builder.create_string(schema.field(i).name());
+//                     let data = &column.data();
+//                     for array in data.chunks() {
+//                         file.write(array.as_ref().data().buffers()[0].data())?;
+//                     }
+
+//                     // column values
+//                     let prim_array = fbs::PrimitiveArray::create(
+//                         &mut builder,
+//                         &fbs::PrimitiveArrayArgs {
+//                             type_: get_fbs_type(column.data_type().clone()),
+//                             encoding: fbs::Encoding::PLAIN,
+//                             offset: current_offset,
+//                             length: num_records as i64,
+//                             null_count: column.data().null_count() as i64,
+//                             // TODO this might be understated
+//                             total_bytes: data.chunks().len() as i64,
+//                         },
+//                     );
+
+//                     let fbs_column = fbs::Column::create(
+//                         &mut builder,
+//                         &fbs::ColumnArgs {
+//                             name: Some(col_name),
+//                             values: Some(prim_array),
+//                             metadata_type: fbs::TypeMetadata::NONE,
+//                             metadata: None,
+//                             user_metadata: None,
+//                         },
+//                     );
+
+//                     current_offset += data.num_rows() as i64;
+
+//                     fbs_cols.push(fbs_column);
+//                 }
+//                 DataType::Utf8 => {
+//                     // assume that Utf8 data is not categorical
+
+//                     // we create 2 buffers for strings
+//                     let mut total_bytes = 0;
+//                     let col_name = builder.create_string(schema.field(i).name());
+//                     let data = &column.data();
+//                     let mut len = 0;
+//                     for array in data.chunks() {
+//                         let data = array.as_ref().data().buffers()[0].data();
+//                         len += data.len();
+//                         file.write(data)?;
+//                     }
+
+//                     let mut pad = 8 - (len as i64 % 8) as i64;
+//                     if pad == 8 {
+//                         pad = 0;
+//                     }
+
+//                     // pad file
+//                     if pad > 0 {
+//                         let mut buffer = Vec::with_capacity(pad as usize);
+//                         for _ in 0..(pad as usize) {
+//                             buffer.push(0);
+//                         }
+
+//                         file.write(&buffer)?;
+//                     }
+
+//                     total_bytes += len as i64;
+
+//                     let buf: &Buffer = data.buffers()[1];
+//                     file.write(buf.data())?;
+
+//                     let mut pad = 8 - (buf.len() as i64 % 8) as i64;
+//                     if pad == 8 {
+//                         pad = 0;
+//                     }
+
+//                     // pad file
+//                     if pad > 0 {
+//                         let mut buffer = Vec::with_capacity(pad as usize);
+//                         for _ in 0..(pad as usize) {
+//                             buffer.push(0);
+//                         }
+
+//                         file.write(&buffer)?;
+//                     }
+
+//                     total_bytes += buf.len() as i64 + pad as i64;
+
+//                     // column values
+//                     let prim_array = fbs::PrimitiveArray::create(
+//                         &mut builder,
+//                         &fbs::PrimitiveArrayArgs {
+//                             type_: get_fbs_type(column.data_type().clone()),
+//                             encoding: fbs::Encoding::PLAIN,
+//                             offset: current_offset,
+//                             length: num_records as i64,
+//                             null_count: column.null_count() as i64,
+//                             // TODO should this be a multiple of 8
+//                             total_bytes: total_bytes as i64,
+//                         },
+//                     );
+
+//                     current_offset += total_bytes as i64;
+
+//                     let fbs_column = fbs::Column::create(
+//                         &mut builder,
+//                         &fbs::ColumnArgs {
+//                             name: Some(col_name),
+//                             values: Some(prim_array),
+//                             metadata_type: fbs::TypeMetadata::NONE,
+//                             metadata: None,
+//                             user_metadata: None,
+//                         },
+//                     );
+
+//                     fbs_cols.push(fbs_column);
+//                 }
+//                 DataType::Float16 => {
+//                     return Err(ArrowError::IoError(
+//                         "DataType::Float16 is currently not supported by Rust Arrow".to_string(),
+//                     ));
+//                 }
+//                 DataType::List(_) | DataType::Struct(_) => {
+//                     return Err(ArrowError::IoError(
+//                         "Writing of lists and structs not supported in Feather".to_string(),
+//                     ));
+//                 }
+//                 DataType::Timestamp(_)
+//                 | DataType::Date32(_)
+//                 | DataType::Date64(_)
+//                 | DataType::Time32(_)
+//                 | DataType::Time64(_)
+//                 | DataType::Interval(_) => {
+//                     return Err(ArrowError::IoError(
+//                         "Date and time formats currently not supported by Rust Arrow".to_string(),
+//                     ));
+//                 }
+//             }
+//         }
+
+//         let fbs_columns = builder.create_vector(&fbs_cols);
+
+//         // loop through schema and write columns
+//         let fbs_table = fbs::CTable::create(
+//             &mut builder,
+//             &fbs::CTableArgs {
+//                 description: None,
+//                 num_rows: num_records as i64,
+//                 columns: Some(fbs_columns),
+//                 version: 2,
+//                 metadata: None,
+//             },
+//         );
+
+//         builder.finish(fbs_table, None);
+
+//         file.write(builder.finished_data())?;
+
+//         let meta_len = builder.finished_data().len() as u32;
+//         file.write_u32::<LittleEndian>(meta_len)?;
+
+//         file.write(&FEATHER_MAGIC)?;
+//         Ok(())
+//     }
+// }
 
 #[cfg(test)]
 mod tests {

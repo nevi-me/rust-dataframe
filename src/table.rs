@@ -1,13 +1,12 @@
 use std::sync::Arc;
 
 use arrow::array::*;
-use arrow::builder::*;
 use arrow::datatypes::*;
 use arrow::record_batch::RecordBatch;
 
 #[derive(Clone)]
 pub struct ChunkedArray {
-    chunks: Vec<Arc<Array>>,
+    chunks: Vec<Arc<dyn Array>>,
     num_rows: usize,
     null_count: usize,
 }
@@ -16,7 +15,7 @@ impl ChunkedArray {
     /// Construct a `ChunkedArray` from a list of `Array`s.
     ///
     /// There must be at least 1 array, and all arrays must have the same data type.
-    fn from_arrays(arrays: Vec<Arc<Array>>) -> Self {
+    fn from_arrays(arrays: Vec<Arc<dyn Array>>) -> Self {
         assert!(arrays.len() > 0);
         let mut num_rows = 0;
         let mut null_count = 0;
@@ -56,11 +55,11 @@ impl ChunkedArray {
 
     /// Get a chunk from the chunked array by index
     /// TODO: should this have bounds-chacking?
-    pub fn chunk(&self, i: usize) -> &Arc<Array> {
+    pub fn chunk(&self, i: usize) -> &Arc<dyn Array> {
         &self.chunks[i]
     }
 
-    pub fn chunks(&self) -> &Vec<Arc<Array>> {
+    pub fn chunks(&self) -> &Vec<Arc<dyn Array>> {
         &self.chunks
     }
 
@@ -117,10 +116,10 @@ where
     arrays
 }
 
-pub fn col_to_binary_arrays(column: &Column) -> Vec<&BinaryArray> {
+pub fn col_to_string_arrays(column: &Column) -> Vec<&StringArray> {
     let mut arrays = vec![];
     for chunk in column.data().chunks() {
-        arrays.push(chunk.as_any().downcast_ref::<BinaryArray>().unwrap())
+        arrays.push(chunk.as_any().downcast_ref::<StringArray>().unwrap())
     }
     arrays
 }
@@ -137,7 +136,7 @@ impl Column {
         Column { data: chunk, field }
     }
 
-    pub fn from_arrays(arrays: Vec<Arc<Array>>, field: arrow::datatypes::Field) -> Self {
+    pub fn from_arrays(arrays: Vec<Arc<dyn Array>>, field: arrow::datatypes::Field) -> Self {
         assert!(arrays.len() > 0);
         for ref array in &arrays {
             assert!(array.data_type() == field.data_type());
@@ -299,7 +298,7 @@ impl Table {
         }
         let num_columns = record_batches[0].num_columns();
         // let mut arrays: Vec<Vec<&Arc<Array>>> = vec![vec![]; num_columns];
-        let mut arrays: Vec<Vec<Arc<Array>>> = vec![vec![]; num_columns];
+        let mut arrays: Vec<Vec<Arc<dyn Array>>> = vec![vec![]; num_columns];
         // create columns from record batches
         for ref batch in record_batches {
             assert!(

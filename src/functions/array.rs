@@ -1,6 +1,5 @@
 use array_tool::vec::*;
 use arrow::array::*;
-use arrow::builder::*;
 use arrow::datatypes::*;
 use arrow::error::ArrowError;
 
@@ -152,6 +151,34 @@ impl ArrayFunctions {
         }
         Ok(c.finish())
     }
+    // fn array_join<T>(array: &ListArray, delimiter: &str, null_replace: &str) -> Result<ListArray, ArrowError>
+    // where
+    //     T: ArrowPrimitiveType + ArrowNumericType,
+    //     T::Native: std::cmp::PartialEq<T::Native> + std::cmp::Ord,
+    // {
+    //     let values_builder: PrimitiveBuilder<T> = PrimitiveBuilder::new(array.values().len());
+    //     let mut c = ListBuilder::new(values_builder);
+    //     // get array datatype so we can downcast appropriately
+    //     let data_type = array.value_type();
+    //     for i in 0..array.len() {
+    //         if array.is_null(i) {
+    //             c.append(true)?
+    //         } else {
+    //             let values = array.values();
+    //             let values = values.as_any().downcast_ref::<PrimitiveArray<T>>().unwrap();
+    //             let values = values.value_slice(
+    //                 array.value_offset(i) as usize,
+    //                 array.value_length(i) as usize,
+    //             ).to_vec();
+
+    //             let u = values.times(count);
+    //             // TODO check how nulls are treated here
+    //             u.iter().for_each(|x| c.values().append_value(*x).unwrap());
+    //             c.append(true)?;
+    //         }
+    //     }
+    //     Ok(c.finish())
+    // }
     pub fn array_max<T>(array: &ListArray) -> Result<PrimitiveArray<T>, ArrowError>
     where
         T: ArrowPrimitiveType + ArrowNumericType,
@@ -389,7 +416,6 @@ impl ArrayFunctions {
 mod tests {
     use super::*;
     use arrow::array::*;
-    use arrow::array_data::*;
     use arrow::buffer::Buffer;
     use arrow::datatypes::*;
     use std::sync::Arc;
@@ -579,49 +605,49 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_array_union() {
-        // Construct a value array
-        let value_data =
-            Int64Array::from(vec![0, 0, 0, 1, 2, 1, 3, 4, 5, 1, 3, 2, 3, 2, 8, 3]).data();
+    // #[test]
+    // fn test_array_union() {
+    //     // Construct a value array
+    //     let value_data =
+    //         Int64Array::from(vec![0, 0, 0, 1, 2, 1, 3, 4, 5, 1, 3, 2, 3, 2, 8, 3]).data();
 
-        let value_offsets = Buffer::from(&[0, 3, 6, 8, 12, 14, 16].to_byte_slice());
+    //     let value_offsets = Buffer::from(&[0, 3, 6, 8, 12, 14, 16].to_byte_slice());
 
-        let value_data =
-            Int64Array::from(vec![0, 0, 0, 1, 2, 1, 3, 4, 5, 1, 3, 2, 3, 2, 8, 3]).data();
+    //     let value_data =
+    //         Int64Array::from(vec![0, 0, 0, 1, 2, 1, 3, 4, 5, 1, 3, 2, 3, 2, 8, 3]).data();
 
-        let value_offsets = Buffer::from(&[0, 3, 6, 8, 12, 14, 16].to_byte_slice());
+    //     let value_offsets = Buffer::from(&[0, 3, 6, 8, 12, 14, 16].to_byte_slice());
 
-        // Construct a list array from the above two
-        let list_data_type = DataType::List(Box::new(DataType::Int64));
-        let list_data = ArrayData::builder(list_data_type.clone())
-            .len(6)
-            .add_buffer(value_offsets.clone())
-            .add_child_data(value_data.clone())
-            .build();
-        let list_array = ListArray::from(list_data);
+    //     // Construct a list array from the above two
+    //     let list_data_type = DataType::List(Box::new(DataType::Int64));
+    //     let list_data = ArrayData::builder(list_data_type.clone())
+    //         .len(6)
+    //         .add_buffer(value_offsets.clone())
+    //         .add_child_data(value_data.clone())
+    //         .build();
+    //     let list_array = ListArray::from(list_data);
 
-        let b = ArrayFunctions::array_sort::<Int64Type>(&list_array).unwrap();
-        let values = b.values();
-        let values = values
-            .as_any()
-            .downcast_ref::<PrimitiveArray<Int64Type>>()
-            .unwrap();
+    //     let b = ArrayFunctions::array_sort::<Int64Type>(&list_array).unwrap();
+    //     let values = b.values();
+    //     let values = values
+    //         .as_any()
+    //         .downcast_ref::<PrimitiveArray<Int64Type>>()
+    //         .unwrap();
 
-        assert_eq!(6, b.len());
-        assert_eq!(16, values.len());
-        assert_eq!(0, b.value_offset(0));
-        assert_eq!(3, b.value_offset(1));
-        assert_eq!(6, b.value_offset(2));
-        assert_eq!(8, b.value_offset(3));
-        assert_eq!(12, b.value_offset(4));
-        assert_eq!(14, b.value_offset(5));
+    //     assert_eq!(6, b.len());
+    //     assert_eq!(16, values.len());
+    //     assert_eq!(0, b.value_offset(0));
+    //     assert_eq!(3, b.value_offset(1));
+    //     assert_eq!(6, b.value_offset(2));
+    //     assert_eq!(8, b.value_offset(3));
+    //     assert_eq!(12, b.value_offset(4));
+    //     assert_eq!(14, b.value_offset(5));
 
-        let expected = Int64Array::from(vec![0, 0, 0, 1, 1, 2, 3, 4, 1, 2, 3, 5, 2, 3, 3, 8]);
-        for i in 0..b.len() {
-            let x = values.value_slice(b.value_offset(i) as usize, b.value_length(i) as usize);
-            let d = expected.value_slice(b.value_offset(i) as usize, b.value_length(i) as usize);
-            assert_eq!(x, d);
-        }
-    }
+    //     let expected = Int64Array::from(vec![0, 0, 0, 1, 1, 2, 3, 4, 1, 2, 3, 5, 2, 3, 3, 8]);
+    //     for i in 0..b.len() {
+    //         let x = values.value_slice(b.value_offset(i) as usize, b.value_length(i) as usize);
+    //         let d = expected.value_slice(b.value_offset(i) as usize, b.value_length(i) as usize);
+    //         assert_eq!(x, d);
+    //     }
+    // }
 }
