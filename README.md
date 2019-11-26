@@ -18,6 +18,19 @@ It mainly focuses on computation, and aims to include:
 
 As a point of reference, we use [Apache Spark Python functions](http://spark.apache.org/docs/2.4.0/api/python/pyspark.sql.html#module-pyspark.sql.functions) for function parity, and aim to be compatible with Apache Spark functions.
 
+## Eager vs Lazy Evaluation
+
+The initial experiments of this project were to see if it's possible to create some form of dataframe. We're happy that this condition is met, however the initial version relied on eager evaluation, which would make it difficult to use in a REPL fashion, and make it slow.
+
+We are mainly focusing on creating a process for lazy evaluation (the current `LazyFrame`), which involves reading an input's schema, then applying transformations on that schema until a materialising action is required.
+While still figuring this out, there might not be much progress on the surface, as most of this exercise is happening offline.
+
+The plan is to provide a reasonable API for lazily transforming data, and the ability to apply some optimisations on the computation graph (e.g. predicate pushdown, rearranging computations).
+
+In the future, `LazyFrame` will probably be renamed to `DataFrame`, and the current `DataFrame` with eager evaluation removed/made private.
+
+The ongoing experiments on lazy evaluation are in the `master` branch, and we would appreciate some help 🙏🏾.
+
 ## Non-Goals
 
 Although we use Apache Spark as a reference, we do not intend on:
@@ -25,16 +38,23 @@ Although we use Apache Spark as a reference, we do not intend on:
 - Creating deferred computation kernels (we'll leverage Arrow Rust)
 - Creating distributed computation kernels
 
-One can think of this library partly as a playground for features that could form part of Arrow.
+Spark is a convenience to reduce bikeshedding, but we will probably provide a more Rust idiomatic API in future.
 
 ## Status
 
+### Roadmap
+
+- [ ] Lazy evaluation (Q1 2020)
+- [ ] Adding compute `fn`s (Q2 2020)
+- [ ] SQL support (Q3 2020)
+- [ ] Python bindings (Q4 2020)
+
 ### IO
 
-We found building this library with Arrow still having very limited IO options to be painful. To that end, we are implementing IO in some formats, some of which we can contribute upstream when happy with implementation details.
+IO support isn't great yet, but this is not the best place to implement it. We are contributing to the effort in Apache Arrow's Rust implementation, and more contributors would be welcome there.
 
-To that end, we're trying to support CSV, JSON, and perhaps other simpler file formats.
-**Note on Feather:** The Feather file format support can be considered as deprecated in favour of Arrow IPC. Though we have implemented Feather, it's meant to be a stop-gap measure until Arrow supports IPC (in Rust). We'll try tackle this in the coming months.
+For now, we're trying to support CSV, JSON, and perhaps other simpler file formats.
+**Note on Feather:** The Feather file format support can be considered as deprecated in favour of Arrow IPC. Though we have implemented Feather, it's meant to be a stop-gap measure until Arrow supports IPC (in Rust, anticipated at `1.0.0`).
 
 - IO Support
   - [X] CSV (using Arrow)
@@ -45,10 +65,13 @@ To that end, we're trying to support CSV, JSON, and perhaps other simpler file f
     - [ ] Write
   - [ ] Feather
     - [X] Read
-    - [X] Write (**do not use**, the current limitation with slicing arrays means we write each record batch as a file, instead of a single file for all the data)
+    - [X] Write (**do not use**, we write each record batch as a partitioned file, instead of a single file for all the data)
   - [ ] Arrow IPC
     - [ ] Read File
     - [ ] Write FIle
+  - [ ] Parquet (relying on Arrow)
+    - [ ] Read File
+    - [ ] Write File
   - [ ] SQL
     - [ ] PostgreSQL
       - [X] Read (ongoing, reading of most columns possible)
@@ -68,6 +91,7 @@ To that end, we're trying to support CSV, JSON, and perhaps other simpler file f
   - [ ] Sort dataframes
   - [ ] Grouped operations
   - [ ] Filter dataframes
+  - [ ] Join dataframes
 
 - Scalar Functions
   - [X] Trig functions (sin, cos, tan, asin, asinh, ...) (using the `num` crate where possible)
