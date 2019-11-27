@@ -7,12 +7,12 @@ use crate::dataframe::DataFrame;
 use crate::expression::*;
 use crate::functions::scalar::ScalarFunctions as ScalarFn;
 use crate::table;
-use ::std::sync::Arc;
 use arrow::array::*;
 use arrow::datatypes::*;
 use arrow::error::ArrowError;
 use num::{abs, Signed, Zero};
 use num_traits::Float;
+use std::sync::Arc;
 use std::{ops::Add, ops::Div, ops::Mul, ops::Sub};
 
 /// Evaluate a numeric scalar op that takes 2 input arrays of the same type
@@ -50,7 +50,7 @@ where
 }
 
 pub trait Evaluate {
-    /// Evaluate an overall transformation against a transformation
+    /// Evaluate a list of computations
     fn evaluate(self, comp: &Vec<Computation>) -> Self;
     /// Evaluate a calculation transformation
     fn calculate(self, operation: &Operation) -> Self;
@@ -69,7 +69,14 @@ impl Evaluate for DataFrame {
                     Aggregate => panic!("aggregations not supported"),
                     Calculate(operation) => frame.calculate(&operation),
                     Group => panic!(),
-                    // Join(_, _, _) => panic!(),
+                    Join(a, b, criteria) => {
+                        let mut frame_a = DataFrame::empty();
+                        frame_a = frame_a.evaluate(a);
+                        let mut frame_b = DataFrame::empty();
+                        frame_b = frame_b.evaluate(b);
+                        // TODO: make sure that joined names follow same logic as LazyFrame
+                        frame_a.join(&frame_b, &criteria)
+                    }
                     Project => panic!(),
                     Read(reader) => Self::read(&reader),
                     Filter(cond) => frame.filter(cond),

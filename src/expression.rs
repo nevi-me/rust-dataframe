@@ -1,12 +1,14 @@
 //! Expressions that generate operations and computations
 
+use crate::error::DataFrameError;
 use crate::io::datasource::DataSourceEval;
+
 use arrow::datatypes::DataType;
 use arrow::error::ArrowError;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum ColumnType {
     Array(DataType),
     Scalar(DataType),
@@ -34,10 +36,24 @@ impl From<ColumnType> for DataType {
 /// A column is an expression of an Arrow `Field`, excluding metadata about nullability
 ///
 /// Columns can be converted to and from `Field`, with the `Field::nullable()` data lost
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct Column {
     pub(crate) name: String,
     pub(crate) column_type: ColumnType,
+}
+
+impl Column {
+    fn name(&self) -> &str {
+        self.name.as_ref()
+    }
+
+    /// Rename column
+    fn rename(&self, name: &str) -> Self {
+        Self {
+            name: name.to_owned(),
+            column_type: self.column_type.clone(),
+        }
+    }
 }
 
 impl From<arrow::datatypes::Field> for Column {
@@ -96,6 +112,65 @@ impl Dataset {
             columns,
         }
     }
+
+    pub fn try_join(&self, other: &Self, on: (&str, &str)) -> Result<Self, DataFrameError> {
+        match (self.get_column(on.0), other.get_column(on.1)) {
+            (Some((_, a)), Some((_, b))) => {
+                if a.column_type == b.column_type {
+                    // join columns and deduplicate names
+                    let a = &self.columns;
+                    let b = &other.columns;
+                    let mut columns = vec![];
+                    let a_cols = a
+                        .iter()
+                        .map(|c: &Column| c.name.as_str())
+                        .collect::<Vec<&str>>();
+                    let b_cols = b
+                        .iter()
+                        .map(|c: &Column| c.name.as_str())
+                        .collect::<Vec<&str>>();
+                    for col in a {
+                        if b_cols.contains(&col.name.as_str()) {
+                            columns.push(col.rename(&format!("a.{}", col.name())))
+                        } else {
+                            columns.push(col.clone())
+                        }
+                    }
+                    for col in b {
+                        if a_cols.contains(&col.name.as_str()) {
+                            columns.push(col.rename(&format!("b.{}", col.name())))
+                        } else {
+                            columns.push(col.clone())
+                        }
+                    }
+                    println!("columns: {:?}", columns);
+                    Ok(Self {
+                        name: "joined_dataframe".to_owned(),
+                        columns,
+                    })
+                } else {
+                    return Err(DataFrameError::ComputeError(
+                        "Join columns must have compatible types".to_owned(),
+                    ));
+                }
+            }
+            (None, Some(_)) => {
+                return Err(DataFrameError::ComputeError(
+                    "Join column does not exist in table A".to_owned(),
+                ))
+            }
+            (Some(_), None) => {
+                return Err(DataFrameError::ComputeError(
+                    "Join column does not exist in table B".to_owned(),
+                ))
+            }
+            (None, None) => {
+                return Err(DataFrameError::ComputeError(
+                    "Join columns do not exist in tables".to_owned(),
+                ))
+            }
+        }
+    }
 }
 
 /// Transformations perform some calculation on a single data set
@@ -104,7 +179,7 @@ pub enum Transformation {
     Aggregate,
     Calculate(Operation),
     // defines the 2 input datasets that are transformed during a join
-    // Join(Dataset, Dataset),
+    Join(Vec<Computation>, Vec<Computation>, JoinCriteria),
     Group,
     Project,
     Read(Reader),
@@ -114,8 +189,9 @@ pub enum Transformation {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct JoinCriteria {
-    join_type: JoinType,
-    criteria: (),
+    pub join_type: JoinType,
+    /// criteria are left and right column name references
+    pub criteria: (String, String),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -200,7 +276,7 @@ impl Operation {
         function: Function,
         out_col_name: Option<String>,
         out_col_type: Option<DataType>,
-    ) -> Result<Vec<Transformation>, ArrowError> {
+    ) -> Result<Vec<Transformation>, DataFrameError> {
         use crate::operation::scalar::ScalarOperation;
         use Function::*;
         // get columns
@@ -212,7 +288,7 @@ impl Operation {
                     inputs.push(col.clone());
                 }
                 None => {
-                    return Err(ArrowError::InvalidArgumentError(format!(
+                    return Err(DataFrameError::ParseError(format!(
                         "Column {} not found",
                         name
                     )));
@@ -267,7 +343,7 @@ impl Operation {
 pub enum Expression {
     Read(Computation),
     Compute(Box<Expression>, Computation),
-    Join(Box<Expression>, Box<Expression>, JoinCriteria),
+    Join(Box<Expression>, Box<Expression>, JoinCriteria, Dataset),
     Write(Box<Expression>),
     Output,
 }
@@ -284,8 +360,21 @@ impl Expression {
                 computations.push(c.clone());
                 computations.append(&mut expr.unroll());
             }
-            Expression::Join(expr1, expr2, _) => {
-                unimplemented!("Join is currently not implemented")
+            Expression::Join(expr1, expr2, join_criteria, output) => {
+                // get the latest expressions and compute a join
+                let cmp_a = expr1.unroll();
+                let a: &Computation = cmp_a.get(0).unwrap();
+                let cmp_b = expr2.unroll();
+                let b: &Computation = cmp_b.get(0).unwrap();
+                computations.push(Computation {
+                    input: vec![a.output.clone(), b.output.clone()],
+                    output: output.clone(),
+                    transformations: vec![Transformation::Join(
+                        cmp_a,
+                        cmp_b,
+                        join_criteria.clone(),
+                    )],
+                })
             }
             Expression::Write(expr) => computations.append(&mut expr.unroll()),
             Expression::Output => {}

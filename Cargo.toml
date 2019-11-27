@@ -11,7 +11,7 @@ num = "0.2"
 num-traits = "0.2"
 csv = "1"
 byteorder = "1"
-flatbuffers = "0.5"
+flatbuffers = "0.6"
 array_tool = "1"
 postgres = {version = "0.16.0-rc.1", features = ["default", "with-chrono-0_4", "with-uuid-0_7"]}
 chrono = "0.4"

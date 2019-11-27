@@ -1,4 +1,4 @@
-use crate::expression::{BooleanFilter, BooleanFilterEval, BooleanInput};
+use crate::expression::{BooleanFilter, BooleanFilterEval, BooleanInput, JoinCriteria};
 use crate::table::Column;
 use crate::utils;
 use arrow::array;
@@ -484,6 +484,10 @@ impl DataFrame {
             Field::new("bool_filter", DataType::Boolean, true),
         );
         Ok(column)
+    }
+
+    pub fn join(&self, other: &Self, criteria: &JoinCriteria) -> Self {
+        panic!("DataFrame joins are not yet implemented")
     }
 }
 
