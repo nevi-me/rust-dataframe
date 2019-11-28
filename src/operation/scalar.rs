@@ -11,7 +11,7 @@ pub trait ScalarOperation {
         inputs: Vec<Column>,
         name: Option<String>,
         to_type: Option<DataType>,
-    ) -> Result<Vec<Operation>, ArrowError>;
+    ) -> Result<Vec<Calculation>, ArrowError>;
 }
 
 /// Operation to add two numeric columns together
@@ -26,7 +26,7 @@ impl ScalarOperation for AddOperation {
         inputs: Vec<Column>,
         name: Option<String>,
         to_type: Option<DataType>,
-    ) -> Result<Vec<Operation>, ArrowError> {
+    ) -> Result<Vec<Calculation>, ArrowError> {
         // add n columns together provided that they are of the same data type
         // for now we support 2 inputs at a time
         // the output data type is also ignored
@@ -55,7 +55,7 @@ impl ScalarOperation for AddOperation {
                         let cast_op = cast_op.first().unwrap();
                         Ok(vec![
                             cast_op.clone(),
-                            Operation {
+                            Calculation {
                                 name: Self::name().to_string(),
                                 inputs: vec![a.clone(), cast_op.output.clone()],
                                 output: Column {
@@ -71,7 +71,7 @@ impl ScalarOperation for AddOperation {
                             },
                         ])
                     } else {
-                        Ok(vec![Operation {
+                        Ok(vec![Calculation {
                             name: Self::name().to_string(),
                             inputs: inputs.clone(),
                             output: Column {
@@ -103,7 +103,7 @@ impl ScalarOperation for CastOperation {
         inputs: Vec<Column>,
         name: Option<String>,
         to_type: Option<DataType>,
-    ) -> Result<Vec<Operation>, ArrowError> {
+    ) -> Result<Vec<Calculation>, ArrowError> {
         // cast columns to the output type
         // we've made provision for casting more than 1 column at a time, but for now we only cast 1
         if inputs.len() != 1 {
@@ -120,7 +120,7 @@ impl ScalarOperation for CastOperation {
                 ColumnType::Array(_) => Err(ArrowError::ComputeError(
                     "Cast operation is currently only supported on scalar columns".to_string(),
                 )),
-                _ => Ok(vec![Operation {
+                _ => Ok(vec![Calculation {
                     name: Self::name().to_string(),
                     inputs: inputs.clone(),
                     output: Column {
@@ -145,7 +145,7 @@ impl ScalarOperation for SubtractOperation {
         inputs: Vec<Column>,
         name: Option<String>,
         to_type: Option<DataType>,
-    ) -> Result<Vec<Operation>, ArrowError> {
+    ) -> Result<Vec<Calculation>, ArrowError> {
         // add n columns together provided that they are of the same data type
         // for now we support 2 inputs at a time
         // the output data type is also ignored
@@ -174,7 +174,7 @@ impl ScalarOperation for SubtractOperation {
                         let cast_op = cast_op.first().unwrap();
                         Ok(vec![
                             cast_op.clone(),
-                            Operation {
+                            Calculation {
                                 name: Self::name().to_string(),
                                 inputs: vec![a.clone(), cast_op.output.clone()],
                                 output: Column {
@@ -190,7 +190,7 @@ impl ScalarOperation for SubtractOperation {
                             },
                         ])
                     } else {
-                        Ok(vec![Operation {
+                        Ok(vec![Calculation {
                             name: Self::name().to_string(),
                             inputs: inputs.clone(),
                             output: Column {
@@ -234,7 +234,7 @@ impl ScalarOperation for SinOperation {
         inputs: Vec<Column>,
         name: Option<String>,
         to_type: Option<DataType>,
-    ) -> Result<Vec<Operation>, ArrowError> {
+    ) -> Result<Vec<Calculation>, ArrowError> {
         // add n columns together provided that they are of the same data type
         // for now we support 2 inputs at a time
         // the output data type is also ignored
@@ -269,13 +269,13 @@ impl ScalarOperation for SinOperation {
                                 column_type: ColumnType::Scalar(DataType::Float64),
                             };
                             Ok(vec![
-                                Operation {
+                                Calculation {
                                     name: CastOperation::name().to_string(),
                                     inputs: inputs.clone(),
                                     output: cast_output.clone(),
                                     function: Function::Cast,
                                 },
-                                Operation {
+                                Calculation {
                                     name: Self::name().to_string(),
                                     inputs: vec![cast_output],
                                     output: Column {
@@ -290,7 +290,7 @@ impl ScalarOperation for SinOperation {
                                 },
                             ])
                         }
-                        DataType::Float32 | DataType::Float64 => Ok(vec![Operation {
+                        DataType::Float32 | DataType::Float64 => Ok(vec![Calculation {
                             name: Self::name().to_string(),
                             inputs: inputs.clone(),
                             output: Column {

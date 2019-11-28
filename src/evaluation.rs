@@ -53,7 +53,7 @@ pub trait Evaluate {
     /// Evaluate a list of computations
     fn evaluate(self, comp: &Vec<Computation>) -> Self;
     /// Evaluate a calculation transformation
-    fn calculate(self, operation: &Operation) -> Self;
+    fn calculate(self, calculation: &Calculation) -> Self;
     /// Evaluate a `Read` operation, returning the read data
     fn read(reader: &Reader) -> Self;
 }
@@ -87,14 +87,14 @@ impl Evaluate for DataFrame {
 
         frame
     }
-    fn calculate(self, operation: &Operation) -> Self {
-        let columns: Vec<&table::Column> = operation
+    fn calculate(self, calculation: &Calculation) -> Self {
+        let columns: Vec<&table::Column> = calculation
             .inputs
             .clone()
             .into_iter()
             .map(|col: Column| self.column_by_name(&col.name))
             .collect();
-        match &operation.function {
+        match &calculation.function {
             Function::Scalar(expr) => match expr {
                 // scalars that take 2 variables
                 ScalarFunction::Add
@@ -103,7 +103,7 @@ impl Evaluate for DataFrame {
                 | ScalarFunction::Multiply => {
                     // we are adding 2 columns together to create a third
                     let column: Vec<ArrayRef> = if let ColumnType::Scalar(dtype) =
-                        &operation.output.column_type
+                        &calculation.output.column_type
                     {
                         match dtype {
                             DataType::UInt16 => {
@@ -235,14 +235,14 @@ impl Evaluate for DataFrame {
                         unreachable!()
                     };
                     self.with_column(
-                        &operation.output.name,
-                        table::Column::from_arrays(column, operation.output.clone().into()),
+                        &calculation.output.name,
+                        table::Column::from_arrays(column, calculation.output.clone().into()),
                     )
                 }
                 // scalars that take 1 variable
                 ScalarFunction::Cosine | ScalarFunction::Sine | ScalarFunction::Tangent => {
                     let column: Vec<ArrayRef> = if let ColumnType::Scalar(dtype) =
-                        &operation.output.column_type
+                        &calculation.output.column_type
                     {
                         match dtype {
                             DataType::Float32 => {
@@ -280,8 +280,8 @@ impl Evaluate for DataFrame {
                         unreachable!()
                     };
                     self.with_column(
-                        &operation.output.name,
-                        table::Column::from_arrays(column, operation.output.clone().into()),
+                        &calculation.output.name,
+                        table::Column::from_arrays(column, calculation.output.clone().into()),
                     )
                 }
                 _ => panic!("Scalar Function {:?} not supported", expr),
@@ -296,19 +296,19 @@ impl Evaluate for DataFrame {
                     .map(|array_ref: &ArrayRef| {
                         arrow::compute::cast(
                             array_ref,
-                            &DataType::from(operation.output.column_type.clone()),
+                            &DataType::from(calculation.output.column_type.clone()),
                         )
                         .unwrap()
                     })
                     .collect();
                 self.with_column(
-                    &operation.output.name,
-                    table::Column::from_arrays(arrays, operation.output.clone().into()),
+                    &calculation.output.name,
+                    table::Column::from_arrays(arrays, calculation.output.clone().into()),
                 )
             }
             Function::Rename => self.with_column_renamed(
-                &operation.inputs.first().unwrap().name,
-                &operation.output.name,
+                &calculation.inputs.first().unwrap().name,
+                &calculation.output.name,
             ),
             Function::Limit(limit) => self.limit(*limit),
             Function::Filter(filter) => self.filter(filter),

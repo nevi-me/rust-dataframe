@@ -57,7 +57,7 @@ impl LazyFrame {
         as_type: Option<DataType>,
     ) -> Result<Self, DataFrameError> {
         // the columns that make the output dataset
-        let ops = Operation::calculate(
+        let ops = Calculation::calculate(
             &self.output,
             input_col_names,
             Function::Scalar(ScalarFunction::Sine),
@@ -95,7 +95,7 @@ impl LazyFrame {
             Some((index, column)) => {
                 let mut columns = self.output.columns.clone();
                 // rename column
-                let rename = Operation::rename(column, new_name);
+                let rename = Calculation::rename(column, new_name);
                 columns[index] = Column {
                     name: new_name.to_owned(),
                     column_type: column.column_type.clone(),

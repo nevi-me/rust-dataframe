@@ -177,7 +177,7 @@ impl Dataset {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Transformation {
     Aggregate,
-    Calculate(Operation),
+    Calculate(Calculation),
     // defines the 2 input datasets that are transformed during a join
     Join(Vec<Computation>, Vec<Computation>, JoinCriteria),
     Group,
@@ -243,17 +243,16 @@ pub struct SqlReadOptions {
     pub(crate) limit: Option<usize>,
 }
 
-/// An operation represents a calculation on one or many columns, producing an output column
+/// A calculation on one or many columns, producing an output column
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Operation {
-    // TODO move operation to operation.rs
+pub struct Calculation {
     pub(crate) name: String,
     pub(crate) inputs: Vec<Column>,
     pub(crate) output: Column,
     pub(crate) function: Function,
 }
 
-impl Operation {
+impl Calculation {
     pub(crate) fn rename(col: &Column, to: &str) -> Self {
         Self {
             name: "rename".to_owned(),
@@ -424,9 +423,9 @@ impl Computation {
     ///
     /// Thus to compute a calculation, we only need to compute how the output dataset looks like.
     /// TODO(Neville) hide the operation struct members behind a function to guarantee the above.
-    fn compute_calculation(input: &Dataset, operation: &Operation) -> Dataset {
+    fn compute_calculation(input: &Dataset, calculation: &Calculation) -> Dataset {
         let mut columns = input.columns.clone();
-        let out_column = &operation.output;
+        let out_column = &calculation.output;
         match input.get_column(&out_column.name) {
             Some((index, column)) => columns[index] = out_column.clone(),
             None => columns.push(out_column.clone()),
