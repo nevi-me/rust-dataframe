@@ -45,7 +45,7 @@ fn pg_to_arrow_type(dt: &Type) -> Option<DataType> {
         //        &TINTERVAL_ARRAY => None,
         //        &DATE => None,
         &Type::TIME => Some(DataType::Time64(TimeUnit::Microsecond)),
-        &Type::TIMESTAMP => Some(DataType::Timestamp(TimeUnit::Millisecond)),
+        &Type::TIMESTAMP => Some(DataType::Timestamp(TimeUnit::Millisecond, None)),
         //        &TIMESTAMP_ARRAY => None,
         //        &DATE_ARRAY => None,
         //        &TIME_ARRAY => None,
@@ -117,7 +117,7 @@ pub fn read_table(
                         };
                     }
                 }
-                DataType::Timestamp(TimeUnit::Millisecond) => {
+                DataType::Timestamp(TimeUnit::Millisecond, _) => {
                     let field_builder = builder
                         .field_builder::<TimestampMillisecondBuilder>(j)
                         .unwrap();

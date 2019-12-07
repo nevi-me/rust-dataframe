@@ -97,7 +97,7 @@ fn get_fbs_type(dtype: DataType) -> fbs::Type {
         Float16 => unimplemented!("Float16 type not supported"),
         Float32 => FLOAT,
         Float64 => DOUBLE,
-        Timestamp(_) => TIMESTAMP,
+        Timestamp(_, _) => TIMESTAMP,
         Date32(_) => DATE,
         Date64(_) => DATE,
         Time32(_) | Time64(_) => TIME,
@@ -546,7 +546,7 @@ impl FeatherWriter for RecordBatch {
                         "Writing of lists and structs not supported in Feather".to_string(),
                     ));
                 }
-                DataType::Timestamp(_)
+                DataType::Timestamp(_, _)
                 | DataType::Date32(_)
                 | DataType::Date64(_)
                 | DataType::Time32(_)
