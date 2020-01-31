@@ -186,7 +186,39 @@ impl LazyFrame {
                     output: dataset,
                 })
             }
+    }
+
+    pub fn sort(&self, sort_criteria: &Vec<SortCriteria>) -> Result<Self, DataFrameError> {
+        // in order to sort by a column, it has to exist and be sortable by
+        // existence is easier to check, but sortability depends on what Arrow supports
+        if sort_criteria.is_empty() {
+            return Err(DataFrameError::ComputeError(
+                "Sort criteria cannot be empty".to_string(),
+            ));
         }
+        // check that columns exist (, and optionally have sortable column types)
+        // let mut columns = vec![];
+        for criteria in sort_criteria {
+            let col =
+                self.output
+                    .get_column(&criteria.column)
+                    .ok_or(DataFrameError::ComputeError(format!(
+                        "Column {:?} used in sort expression does not exist in dataframe",
+                        &criteria.column
+                    )))?;
+            // TODO: check for sortability
+        }
+        let computation = Computation {
+            input: vec![self.output.clone()],
+            transformations: vec![Transformation::Sort(sort_criteria.clone())],
+            output: self.output.clone(),
+        };
+        let expression = Expression::Compute(Box::new(self.expression.clone()), computation);
+        Ok(Self {
+            id: "sorted_frame".to_owned(),
+            expression,
+            output: self.output.clone(),
+        })
     }
 }
 

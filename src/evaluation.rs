@@ -81,6 +81,7 @@ impl Evaluate for DataFrame {
                     Read(reader) => Self::read(&reader),
                     Filter(cond) => frame.filter(cond),
                     Limit(size) => frame.limit(*size),
+                    Sort(criteria) => frame.sort(criteria),
                 };
             }
         }

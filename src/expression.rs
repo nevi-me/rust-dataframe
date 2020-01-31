@@ -185,6 +185,13 @@ pub enum Transformation {
     Read(Reader),
     Limit(usize),
     Filter(BooleanFilter),
+    Sort(Vec<SortCriteria>),
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct SortCriteria {
+    pub column: String,
+    pub descending: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

@@ -178,6 +178,11 @@ impl DataFrame {
         )
     }
 
+    /// Sort the dataframe by specified criteria
+    pub fn sort(&self, criteria: &Vec<SortCriteria>) -> Self {
+        unimplemented!("Sorting not yet implemented")
+    }
+
     /// Return the dataframe with an id that monotonically increases
     ///
     /// The id is a 64-bit array
