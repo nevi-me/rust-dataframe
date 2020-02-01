@@ -65,17 +65,17 @@ impl LazyFrame {
             as_type,
         )?;
         let mut out_dataset: Dataset = self.output.clone();
+        // this transformation only works with calculations
         for tfm in &ops {
             match tfm {
-                Transformation::Aggregate => panic!("can't create column from aggregation"),
                 Transformation::Calculate(op) => {
                     out_dataset = out_dataset.append_column(op.output.clone())
                 }
-                _ => panic!("can't create column from {:?}", tfm),
+                _ => panic!("can't create column from {:?} transformation", tfm),
             }
         }
         Ok(Self {
-            id: "".to_owned(),
+            id: self.id.clone(),
             output: out_dataset.clone(),
             expression: Expression::Compute(
                 Box::new(self.expression.clone()),
@@ -270,7 +270,32 @@ impl LazyFrame {
         Ok(Self {
             id: "sorted_frame".to_owned(),
             expression,
+            output: self.output.clone(),
+        })
+    }
+
+    pub fn aggregate(
+        &self,
+        groups: Vec<&str>,
+        aggr: Vec<Aggregation>,
+    ) -> Result<Self, DataFrameError> {
+        // check if groupby columns are in the dataframe
+        let out_dataset = self.output.try_aggregate(&groups, &aggr).unwrap();
+
+        Ok(Self {
+            id: self.id.clone(),
             output: out_dataset.clone(),
+            expression: Expression::Compute(
+                Box::new(self.expression.clone()),
+                Computation {
+                    input: vec![self.output.clone()],
+                    transformations: vec![Transformation::GroupAggregate(
+                        groups.iter().map(|s| s.to_string()).collect(),
+                        aggr,
+                    )],
+                    output: out_dataset,
+                },
+            ),
         })
     }
 }
@@ -420,6 +445,35 @@ mod tests {
             .unwrap();
         frame = frame.select(vec!["town", "sin_lat", "sin_lng"]).unwrap();
         frame = frame.drop(vec!["town"]).unwrap();
+        dbg!(frame.expression.unroll());
+    }
+
+    #[test]
+    fn test_group_aggregate() {
+        let reader = Reader {
+            source: DataSourceType::Csv(
+                "./test/data/uk_cities_with_headers.csv".to_owned(),
+                CsvReadOptions {
+                    has_headers: true,
+                    batch_size: 1024,
+                    delimiter: None,
+                    max_records: Some(1024),
+                    projection: None,
+                },
+            ),
+        };
+        let compute = Computation::compute_read(&reader);
+        // read data
+        let mut frame = LazyFrame::read(compute);
+        frame = frame
+            .aggregate(
+                vec!["city"],
+                vec![Aggregation {
+                    function: AggregateFunction::Max,
+                    columns: vec!["lat".to_string(), "lng".to_string()],
+                }],
+            )
+            .unwrap();
         dbg!(frame.expression.unroll());
     }
 }

@@ -66,9 +66,8 @@ impl Evaluate for DataFrame {
         for c in comp.iter().rev() {
             for transform in &c.transformations {
                 frame = match transform {
-                    Aggregate => panic!("aggregations not supported"),
+                    GroupAggregate(_, _) => panic!("aggregations not supported"),
                     Calculate(operation) => frame.calculate(&operation),
-                    Group => panic!(),
                     Join(a, b, criteria) => {
                         let mut frame_a = DataFrame::empty();
                         frame_a = frame_a.evaluate(a);

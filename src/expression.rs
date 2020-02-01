@@ -113,6 +113,115 @@ impl Dataset {
         }
     }
 
+    pub fn try_aggregate(
+        &self,
+        groups: &Vec<&str>,
+        aggr: &Vec<Aggregation>,
+    ) -> Result<Self, DataFrameError> {
+        // check that the columns in the aggregate exist
+        // TODO: might be a better way to loop
+        let mut output_cols: Vec<Column> = vec![];
+        for col in groups {
+            match self.get_column(col) {
+                None => {
+                    return Err(DataFrameError::ComputeError(format!(
+                        "Grouping column {:?} does not exist",
+                        col
+                    )))
+                }
+                Some((_, col)) => {
+                    // add group column
+                    output_cols.push(col.clone())
+                }
+            }
+        }
+        // check that the aggregated columns can be aggregated
+        for aggregation in aggr {
+            for col in &aggregation.columns {
+                // TODO: handle "*" selection
+                // check if columns can be aggregated
+                match self.get_column(&col) {
+                    None => {
+                        return Err(DataFrameError::ComputeError(format!(
+                            "Aggregating column {:?} does not exist",
+                            col
+                        )))
+                    }
+                    Some((_, col)) => {
+                        // check if column can be aggregated with aggregation type
+                        // TODO: extract this logic to somewhere more appropriate
+                        match aggregation.function {
+                            AggregateFunction::Avg => {
+                                // only numeric types should be aggregated
+                                output_cols.push(Column {
+                                    name: format!("avg({})", col.name),
+                                    column_type: col.column_type.clone(),
+                                })
+                            }
+                            AggregateFunction::Sum => {
+                                // only numeric types should be summed (excluding temporal)
+                                output_cols.push(Column {
+                                    name: format!("sum({})", col.name),
+                                    column_type: col.column_type.clone(),
+                                })
+                            }
+                            AggregateFunction::Max => {
+                                // only numeric types (including temporal)
+                                output_cols.push(Column {
+                                    name: format!("max({})", col.name),
+                                    column_type: col.column_type.clone(),
+                                })
+                            }
+                            AggregateFunction::Min => {
+                                // only numeric types (including temporal)
+                                output_cols.push(Column {
+                                    name: format!("min({})", col.name),
+                                    column_type: col.column_type.clone(),
+                                })
+                            }
+                            AggregateFunction::Count => {
+                                // count should support most/all column types
+                                output_cols.push(Column {
+                                    name: format!("count({})", col.name),
+                                    column_type: ColumnType::Scalar(DataType::UInt32),
+                                })
+                            }
+                            AggregateFunction::CountDistinct => {
+                                // count should support most/all column types
+                                output_cols.push(Column {
+                                    name: format!("count_distinct({})", col.name),
+                                    column_type: ColumnType::Scalar(DataType::UInt32),
+                                })
+                            }
+                            AggregateFunction::First => output_cols.push(Column {
+                                name: format!("first({})", col.name),
+                                column_type: col.column_type.clone(),
+                            }),
+                            AggregateFunction::Last => output_cols.push(Column {
+                                name: format!("last({})", col.name),
+                                column_type: col.column_type.clone(),
+                            }),
+                            AggregateFunction::Kurtosis
+                            | AggregateFunction::Skewness
+                            | AggregateFunction::StdDev
+                            | AggregateFunction::SumDistinct
+                            | AggregateFunction::Variance => {
+                                return Err(DataFrameError::ComputeError(
+                                    "Aggregation not yet supported".to_string(),
+                                ))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(Self {
+            name: "aggregated_dataset".to_string(),
+            columns: output_cols,
+        })
+    }
+
     pub fn try_join(&self, other: &Self, on: (&str, &str)) -> Result<Self, DataFrameError> {
         match (self.get_column(on.0), other.get_column(on.1)) {
             (Some((_, a)), Some((_, b))) => {
@@ -173,14 +282,13 @@ impl Dataset {
     }
 }
 
-/// Transformations perform some calculation on a single data set
+/// Transformations perform some calculation on data sets
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Transformation {
-    Aggregate,
+    GroupAggregate(Vec<String>, Vec<Aggregation>),
     Calculate(Calculation),
-    // defines the 2 input datasets that are transformed during a join
+    /// Defines the 2 input datasets that are transformed during a join
     Join(Vec<Computation>, Vec<Computation>, JoinCriteria),
-    Group,
     /// Selects columns by name from the dataset
     Select(Vec<String>),
     Drop(Vec<String>),
@@ -194,6 +302,12 @@ pub enum Transformation {
 pub struct SortCriteria {
     pub column: String,
     pub descending: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Aggregation {
+    pub function: AggregateFunction,
+    pub columns: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -539,6 +653,27 @@ pub enum ArrayFunction {
     Zip,
     CollectList,
     CollectSet,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum AggregateFunction {
+    Sum,
+    Max,
+    Min,
+    Avg,
+    Count,
+    CountDistinct,
+    First,
+    Kurtosis,
+    Last,
+    Skewness,
+    StdDev,
+    SumDistinct,
+    Variance,
+}
+
+impl AggregateFunction {
+    pub fn can_aggregate() {}
 }
 
 // TODO: This is a temporary work-around until there are scalars in Arrow
