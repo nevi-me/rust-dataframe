@@ -323,7 +323,7 @@ impl Evaluate for DataFrame {
             Csv(path, options) => DataFrame::from_csv(&path, None),
             Json(path) => DataFrame::from_json(&path, None),
             Parquet(path) => unimplemented!("Parquet data sources not yet supported"),
-            Feather(path) => DataFrame::from_feather(&path).unwrap(),
+            Arrow(path) => DataFrame::from_arrow(&path).unwrap(),
             Sql(table, options) => match &options.db {
                 SqlDatabase::Postgres => DataFrame::from_sql(&options.connection_string, &table),
                 t @ _ => unimplemented!("SQL Protocol {:?} not yet supported", t),

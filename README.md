@@ -45,8 +45,11 @@ Spark is a convenience to reduce bikeshedding, but we will probably provide a mo
 ### Roadmap
 
 - [ ] Lazy evaluation (Q1 2020)
+  - [ ] Aggregations
+  - [ ] Joins
+  - [ ] Sorting
 - [ ] Adding compute `fn`s (Q2 2020)
-- [ ] SQL support (Q3 2020)
+- [ ] SQL support (Q3 2020) [Uncertain if needed]
 - [ ] Python bindings (Q4 2020)
 
 ### IO
@@ -63,20 +66,20 @@ For now, we're trying to support CSV, JSON, and perhaps other simpler file forma
   - [ ] JSON
     - [X] Read (submitted to Arrow)
     - [ ] Write
-  - [ ] Feather
-    - [X] Read
-    - [X] Write (**do not use**, we write each record batch as a partitioned file, instead of a single file for all the data)
-  - [ ] Arrow IPC
-    - [ ] Read File
-    - [ ] Write FIle
+  - [X] Arrow IPC
+    - [X] Read File
+    - [X] Write FIle
   - [ ] Parquet (relying on Arrow)
     - [ ] Read File
     - [ ] Write File
-  - [ ] SQL
+  - [ ] SQL (planning on relying on other efforts, if someone wants to build a SQL<>Arrow converter)
     - [ ] PostgreSQL
       - [X] Read (ongoing, reading of most columns possible)
       - [ ] Write
     - [ ] MSSQL (using tiberius)
+      - [ ] Read
+      - [ ] Write
+    - [ ] MySQL
       - [ ] Read
       - [ ] Write
 
@@ -87,7 +90,7 @@ For now, we're trying to support CSV, JSON, and perhaps other simpler file forma
   - [X] Select subset of columns, drop columns
   - [X] Add or remove columns
   - [X] Rename columns
-  - [ ] Create dataframe from record batches (a `Vec<RecordBatch>` as well as an iterator)
+  - [-] Create dataframe from record batches (a `Vec<RecordBatch>` as well as an iterator)
   - [ ] Sort dataframes
   - [ ] Grouped operations
   - [ ] Filter dataframes
@@ -100,7 +103,7 @@ For now, we're trying to support CSV, JSON, and perhaps other simpler file forma
   - [ ] String functions
     - [ ] Basic string manipulation
     - [ ] Regular expressions (leveraging `regex`)
-    - [ ] Casting to and from strings
+    - [ ] Casting to and from strings (using Arrow compute's `cast` kernel)
   - [ ] Crypto/hash functions (md5, crc32, sha{x}, ...)
   - [ ] Other functions (that we haven't classified)
 
@@ -116,7 +119,15 @@ For now, we're trying to support CSV, JSON, and perhaps other simpler file forma
 
 - Array Functions
   - [ ] Compatibility with Spark 2.4 functions
+  - [ ] Compatibility with Spark 3.0 functions
 
 ## Performance
 
-We plan on providing simple benchmarks in the near future, especially after we gain the ability to save dataframes to disk. Specifically, after we implement CSV and JSON writers.
+We plan on providing simple benchmarks in the near future. The current blockers are:
+
+- [ ] IO
+  - [ ] Text format (CSV)
+  - [X] Binary format (Arrow IPC)
+- [ ] Lazy operations
+- [ ] Aggregation
+- [ ] Joins

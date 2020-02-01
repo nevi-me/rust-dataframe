@@ -220,7 +220,7 @@ pub struct Reader {
 pub enum DataSourceType {
     Csv(String, CsvReadOptions),
     Json(String),
-    Feather(String),
+    Arrow(String),
     // TODO provide an option between a table name and a SQL query
     Sql(String, SqlReadOptions),
     Parquet(String),

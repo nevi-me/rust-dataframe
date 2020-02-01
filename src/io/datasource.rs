@@ -1,9 +1,9 @@
 //! Data source evaluators and readers
 
 use crate::expression::{DataSourceType, Dataset, Reader};
-use ::std::fs::File;
 use arrow::csv::{Reader as CsvReader, ReaderBuilder as CsvBuilder};
 use arrow::error::ArrowError;
+use std::fs::File;
 
 pub trait DataSourceEval {
     fn get_dataset(&self) -> Result<Dataset, ArrowError>;
@@ -34,7 +34,7 @@ impl DataSourceEval for Reader {
             }
             Json(path) => panic!(),
             Parquet(path) => panic!(),
-            Feather(path) => panic!(),
+            Arrow(path) => panic!(),
             Sql(table, options) => panic!(),
         }
     }

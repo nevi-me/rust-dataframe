@@ -1,20 +1,21 @@
-use crate::expression::{BooleanFilter, BooleanFilterEval, BooleanInput, JoinCriteria};
-use crate::table::Column;
-use crate::utils;
-use arrow::array;
-use arrow::array::{Array, ArrayDataBuilder, ArrayDataRef, ArrayRef, UInt64Array};
-use arrow::csv::Reader as CsvReader;
-use arrow::csv::ReaderBuilder as CsvReaderBuilder;
-use arrow::datatypes::*;
-use arrow::error::ArrowError;
-use arrow::json::Reader as JsonReader;
-use arrow::json::ReaderBuilder as JsonReaderBuilder;
-use arrow::record_batch::RecordBatch;
 use std::fs::File;
 use std::io::BufReader;
 use std::sync::Arc;
 
+use arrow::array::{Array, ArrayDataBuilder, ArrayDataRef, ArrayRef, UInt64Array};
+use arrow::csv::{Reader as CsvReader, ReaderBuilder as CsvReaderBuilder};
+use arrow::datatypes::*;
+use arrow::error::ArrowError;
+use arrow::ipc::{reader::FileReader as IpcFileReader, writer::FileWriter as IpcFileWriter};
+use arrow::json::{Reader as JsonReader, ReaderBuilder as JsonReaderBuilder};
+use arrow::record_batch::RecordBatch;
+
 use crate::error::DataFrameError;
+use crate::expression::{
+    BooleanFilter, BooleanFilterEval, BooleanInput, JoinCriteria, SortCriteria,
+};
+use crate::table::Column;
+use crate::utils;
 
 pub struct DataFrame {
     schema: Arc<Schema>,
@@ -343,15 +344,17 @@ impl DataFrame {
         }
     }
 
-    pub fn from_feather(path: &str) -> Result<Self, ArrowError> {
-        use crate::io::feather::*;
+    pub fn from_arrow(path: &str) -> Result<Self, ArrowError> {
+        let mut reader = IpcFileReader::try_new(File::open(path)?)?;
 
-        let mut reader = FeatherReader::new(File::open(path)?);
-        let batch = reader.read()?;
+        let schema = reader.schema();
+        let mut batches = vec![];
 
-        let schema = batch.schema().clone();
+        while let Some(batch) = reader.next()? {
+            batches.push(batch);
+        }
 
-        let table = crate::table::Table::from_record_batches(schema.clone(), vec![batch]);
+        let table = crate::table::Table::from_record_batches(schema.clone(), batches);
 
         Ok(DataFrame {
             schema,
@@ -421,23 +424,17 @@ impl DataFrame {
         }
     }
 
-    /// Write dataframe to a feather file
+    /// Write dataframe to an Arrow IPC file
     ///
-    /// Data is currently written as individual batches (as Arrow doesn't yet support slicing).
-    /// This will be rectified when the above condition is met.
-    pub fn to_feather(&self, path: &str) -> Result<(), ArrowError> {
-        use crate::io::feather::*;
-
+    /// TOOO: caller must supply extension as there is no common extension yet
+    pub fn to_arrow(&self, path: &str) -> Result<(), ArrowError> {
+        let file = File::create(path)?;
+        let mut writer = IpcFileWriter::try_new(file, self.schema())?;
         let record_batches = self.to_record_batches();
 
-        record_batches.iter().enumerate().for_each(|(i, batch)| {
-            let mut file_name = String::new();
-            file_name.push_str(path);
-            file_name.push_str("_");
-            file_name.push_str(&i.to_string());
-            file_name.push_str(".feather");
-            batch.write_feather(&file_name).unwrap();
-        });
+        for batch in record_batches {
+            writer.write(&batch)?;
+        }
 
         Ok(())
     }
@@ -634,7 +631,7 @@ mod tests {
     }
 
     #[test]
-    fn feather_io() {
+    fn test_arrow_io() {
         let mut dataframe = DataFrame::from_csv("./test/data/uk_cities_with_headers.csv", None);
         let a = dataframe.column_by_name("lat");
         let b = dataframe.column_by_name("lng");
@@ -665,7 +662,7 @@ mod tests {
             Column::from_arrays(lowercase, Field::new("city_lower", DataType::Utf8, true)),
         );
 
-        let write = dataframe.to_feather("./test/data/uk_cities");
+        let write = dataframe.to_arrow("./test/data/uk_cities.arrow");
         assert!(write.is_ok());
     }
 
