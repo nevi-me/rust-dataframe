@@ -77,7 +77,8 @@ impl Evaluate for DataFrame {
                         // TODO: make sure that joined names follow same logic as LazyFrame
                         frame_a.join(&frame_b, &criteria)
                     }
-                    Project => panic!(),
+                    Select(cols) => frame.select(cols.iter().map(|s| s.as_str()).collect()),
+                    Drop(cols) => frame.drop(cols.iter().map(|s| s.as_str()).collect()),
                     Read(reader) => Self::read(&reader),
                     Filter(cond) => frame.filter(cond),
                     Limit(size) => frame.limit(*size),

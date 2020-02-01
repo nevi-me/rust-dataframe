@@ -255,7 +255,7 @@ impl DataFrame {
     /// Returns a dataframe with specified columns dropped.
     ///
     /// If a column name does not exist, it is omitted.
-    pub fn drop(&self, col_names: Vec<&str>) -> Self {
+    pub fn drop(&mut self, col_names: Vec<&str>) -> Self {
         // get the names of columns from the schema, and match them with supplied
         let mut col_num: i16 = -1;
         let schema = self.schema.clone();

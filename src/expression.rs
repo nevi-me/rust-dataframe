@@ -181,7 +181,9 @@ pub enum Transformation {
     // defines the 2 input datasets that are transformed during a join
     Join(Vec<Computation>, Vec<Computation>, JoinCriteria),
     Group,
-    Project,
+    /// Selects columns by name from the dataset
+    Select(Vec<String>),
+    Drop(Vec<String>),
     Read(Reader),
     Limit(usize),
     Filter(BooleanFilter),

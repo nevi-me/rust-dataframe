@@ -155,37 +155,90 @@ impl LazyFrame {
     }
 
     /// project columns
-    pub fn select(&self, col_names: Vec<&str>) -> Self {
-        unimplemented!()
+    pub fn select(&self, col_names: Vec<&str>) -> Result<Self, DataFrameError> {
+        //check that columns exist, then return the columns that exist
+        let mut columns = vec![];
+        let mut projected = vec![];
+        for col in col_names {
+            let column = self
+                .output
+                .get_column(col)
+                .ok_or(DataFrameError::ComputeError(format!(
+                    "Column {:?} cannot be selected as it does not exist",
+                    col
+                )))?;
+            columns.push(column.1.clone());
+            projected.push(col.to_string());
+        }
+        let out_dataset = Dataset {
+            name: "".to_string(),
+            columns: columns,
+        };
+        let computation = Computation {
+            input: vec![self.output.clone()],
+            transformations: vec![Transformation::Select(projected)],
+            output: out_dataset.clone(),
+        };
+        let expression = Expression::Compute(Box::new(self.expression.clone()), computation);
+        Ok(Self {
+            id: "projected_frame".to_owned(),
+            expression,
+            output: out_dataset.clone(),
+        })
     }
 
     /// drop columns
-    pub fn drop(&self, col_names: Vec<&str>) -> Self {
-        unimplemented!()
+    ///
+    /// TODO: drop should be infallible as it should just filter for non-existent columns
+    pub fn drop(&self, col_names: Vec<&str>) -> Result<Self, DataFrameError> {
+        let mut columns = vec![];
+        let mut projected = vec![];
+        for col in self.output.columns.clone() {
+            if col_names.contains(&col.name.as_str()) {
+                projected.push(col.name);
+                continue;
+            }
+            columns.push(col.clone());
+        }
+        let out_dataset = Dataset {
+            name: "".to_string(),
+            columns,
+        };
+        let computation = Computation {
+            input: vec![self.output.clone()],
+            transformations: vec![Transformation::Drop(projected)],
+            output: out_dataset.clone(),
+        };
+        let expression = Expression::Compute(Box::new(self.expression.clone()), computation);
+        Ok(Self {
+            id: "projected_frame".to_owned(),
+            expression,
+            output: out_dataset.clone(),
+        })
     }
 
     pub fn join(&self, other: &Self, join_criteria: &JoinCriteria) -> Result<Self, DataFrameError> {
         // in order to join, we need to check that the join columns exist on both sides,
         //  and that they are compatible
 
-        match self.output.try_join(
-            &other.output,
-            (&join_criteria.criteria.0, &join_criteria.criteria.1),
-        ) {
-            Err(e) => return Err(e),
-            Ok(dataset) => {
+        self.output
+            .try_join(
+                &other.output,
+                (&join_criteria.criteria.0, &join_criteria.criteria.1),
+            )
+            .map(|dataset| {
                 let expression = Expression::Join(
                     Box::new(self.expression.clone()),
                     Box::new(other.expression.clone()),
                     join_criteria.clone(),
                     dataset.clone(),
                 );
-                Ok(Self {
+                Self {
                     id: "joined_frame".to_owned(),
                     expression,
                     output: dataset,
-                })
-            }
+                }
+            })
     }
 
     pub fn sort(&self, sort_criteria: &Vec<SortCriteria>) -> Result<Self, DataFrameError> {
@@ -217,7 +270,7 @@ impl LazyFrame {
         Ok(Self {
             id: "sorted_frame".to_owned(),
             expression,
-            output: self.output.clone(),
+            output: out_dataset.clone(),
         })
     }
 }
@@ -327,5 +380,46 @@ mod tests {
         dbg!(frame.expression.unroll());
 
         panic!("test failed intentionally")
+    }
+
+    #[test]
+    fn test_projection() {
+        let reader = Reader {
+            source: DataSourceType::Csv(
+                "./test/data/uk_cities_with_headers.csv".to_owned(),
+                CsvReadOptions {
+                    has_headers: true,
+                    batch_size: 1024,
+                    delimiter: None,
+                    max_records: Some(1024),
+                    projection: None,
+                },
+            ),
+        };
+        let compute = Computation::compute_read(&reader);
+        // read data
+        let mut frame = LazyFrame::read(compute);
+        // rename a column
+        frame = frame.with_column_renamed("city", "town");
+        // add a column as a calculation of 2 columns
+        frame = frame
+            .with_column(
+                "sin_lat",
+                Function::Scalar(ScalarFunction::Sine),
+                vec!["lat"],
+                None,
+            )
+            .unwrap();
+        frame = frame
+            .with_column(
+                "sin_lng",
+                Function::Scalar(ScalarFunction::Sine),
+                vec!["lng"],
+                None,
+            )
+            .unwrap();
+        frame = frame.select(vec!["town", "sin_lat", "sin_lng"]).unwrap();
+        frame = frame.drop(vec!["town"]).unwrap();
+        dbg!(frame.expression.unroll());
     }
 }
