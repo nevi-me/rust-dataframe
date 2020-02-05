@@ -14,6 +14,8 @@ use crate::error::DataFrameError;
 use crate::expression::{
     BooleanFilter, BooleanFilterEval, BooleanInput, JoinCriteria, SortCriteria,
 };
+use crate::io::sql;
+use crate::io::sql::SqlDataSource;
 use crate::table::Column;
 use crate::utils;
 
@@ -409,9 +411,9 @@ impl DataFrame {
     /// This might be undesirable if reading large tables. However, note that this library currently performs
     /// eager evaluation, so the DataFrame would still be created and held in-memory. We will improve this with
     /// a better execution model in future.
-    pub fn from_sql(connection_string: &str, table_name: &str) -> Self {
+    pub fn from_sql_table(connection_string: &str, table_name: &str) -> Self {
         let batches =
-            crate::io::postgres::read_table(connection_string, table_name, 0, 1024).unwrap();
+            sql::postgres::Postgres::read_table(connection_string, table_name, 0, 1024).unwrap();
         if batches.is_empty() {
             DataFrame::empty()
         } else {
@@ -530,7 +532,7 @@ mod tests {
         //     timestamp timestamp,
         //     time time
         // );
-        let dataframe = DataFrame::from_sql(
+        let dataframe = DataFrame::from_sql_table(
             "postgres://postgres:password@localhost:5432/postgres",
             "public.arrow_data",
         );

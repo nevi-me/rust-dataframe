@@ -20,7 +20,7 @@ impl From<ArrowError> for DataFrameError {
 
 impl From<::std::io::Error> for DataFrameError {
     fn from(error: ::std::io::Error) -> Self {
-        DataFrameError::IoError(error.description().to_string())
+        DataFrameError::IoError(error.to_string())
     }
 }
 
@@ -32,7 +32,7 @@ impl From<std::option::NoneError> for DataFrameError {
 
 impl From<std::str::Utf8Error> for DataFrameError {
     fn from(error: ::std::str::Utf8Error) -> Self {
-        DataFrameError::ParseError(error.description().to_string())
+        DataFrameError::ParseError(error.to_string())
     }
 }
 

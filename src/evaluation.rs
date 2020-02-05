@@ -325,7 +325,9 @@ impl Evaluate for DataFrame {
             Parquet(path) => unimplemented!("Parquet data sources not yet supported"),
             Arrow(path) => DataFrame::from_arrow(&path).unwrap(),
             Sql(table, options) => match &options.db {
-                SqlDatabase::Postgres => DataFrame::from_sql(&options.connection_string, &table),
+                SqlDatabase::Postgres => {
+                    DataFrame::from_sql_table(&options.connection_string, &table)
+                }
                 t @ _ => unimplemented!("SQL Protocol {:?} not yet supported", t),
             },
         }

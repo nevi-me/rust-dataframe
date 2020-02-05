@@ -1,2 +1,2 @@
 pub mod datasource;
-pub mod postgres;
+pub mod sql;
