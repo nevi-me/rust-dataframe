@@ -1,6 +1,8 @@
 //! Lazy dataframe
 
+use crate::dataframe::DataFrame;
 use crate::error::DataFrameError;
+use crate::evaluation::Evaluate;
 use crate::expression::*;
 
 use arrow::datatypes::{DataType, Schema};
@@ -28,17 +30,20 @@ impl LazyFrame {
         }
     }
 
-    pub fn write(&self) -> Result<(), DataFrameError> {
+    /// Materialise and write the frame to the writer
+    pub fn write(&self, writer: &Writer) -> Result<(), DataFrameError> {
         // a write operation evaluates the expression, and returns a write status
-        Err(DataFrameError::ComputeError(
-            "Write not yet implemented".to_string(),
-        ))
+        let dataframe = self.evaluate();
+        // write the resulting dataframe
+        dataframe.write(writer)
     }
 
     /// Prints a subset of the data frame to console
     pub fn display(&self, limit: usize) -> Result<(), DataFrameError> {
         // display is like write, except it just shows results as a table
-        self.limit(limit);
+        let limited = self.limit(limit);
+        let _dataframe = limited.evaluate();
+        // TODO: display dataframe
         Err(DataFrameError::ComputeError(
             "Display not yet implemented".to_string(),
         ))
@@ -298,6 +303,13 @@ impl LazyFrame {
             ),
         })
     }
+
+    /// Helper function to evaluate the frame's expressions, and return a dataframe
+    pub(crate) fn evaluate(&self) -> DataFrame {
+        let ops = self.expression.unroll();
+        let dataframe = DataFrame::empty();
+        dataframe.evaluate(&ops)
+    }
 }
 
 #[cfg(test)]
@@ -340,7 +352,10 @@ mod tests {
                 None,
             )
             .unwrap();
-        dbg!(frame.expression.unroll());
+        // materialise the frame
+        let dataframe = frame.evaluate();
+        assert_eq!(dataframe.num_columns(), 5);
+        assert_eq!(dataframe.num_rows(), 37);
     }
 
     #[test]
@@ -403,8 +418,6 @@ mod tests {
             )
             .unwrap();
         dbg!(frame.expression.unroll());
-
-        panic!("test failed intentionally")
     }
 
     #[test]

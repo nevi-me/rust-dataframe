@@ -3,6 +3,7 @@
 use crate::expression::{DataSourceType, Dataset, Reader};
 use arrow::csv::{Reader as CsvReader, ReaderBuilder as CsvBuilder};
 use arrow::error::ArrowError;
+use arrow::ipc::reader::FileReader as ArrowFileReader;
 use std::fs::File;
 
 pub trait DataSourceEval {
@@ -34,7 +35,19 @@ impl DataSourceEval for Reader {
             }
             Json(path) => panic!(),
             Parquet(path) => panic!(),
-            Arrow(path) => panic!(),
+            Arrow(path) => {
+                let file = File::open(&path)?;
+                let reader = ArrowFileReader::try_new(file)?;
+                Ok(Dataset {
+                    name: "ipc_file_source".to_owned(),
+                    columns: reader
+                        .schema()
+                        .fields()
+                        .iter()
+                        .map(|f| f.clone().into())
+                        .collect(),
+                })
+            }
             Sql(table, options) => panic!(),
         }
     }

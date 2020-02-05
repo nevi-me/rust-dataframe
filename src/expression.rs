@@ -291,6 +291,7 @@ pub enum Transformation {
     Join(Vec<Computation>, Vec<Computation>, JoinCriteria),
     /// Selects columns by name from the dataset
     Select(Vec<String>),
+    /// Drops columns by name from the dataset
     Drop(Vec<String>),
     Read(Reader),
     Limit(usize),
@@ -331,6 +332,11 @@ pub struct Reader {
     pub(crate) source: DataSourceType,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Writer {
+    pub(crate) sink: DataSinkType,
+}
+
 /// data source types (and options)
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum DataSourceType {
@@ -343,12 +349,24 @@ pub enum DataSourceType {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum DataSinkType {
+    Csv(String, CsvWriteOptions),
+    Arrow(String),
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct CsvReadOptions {
     pub(crate) has_headers: bool,
     pub(crate) delimiter: Option<u8>,
     pub(crate) max_records: Option<usize>,
     pub(crate) batch_size: usize,
     pub(crate) projection: Option<Vec<usize>>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct CsvWriteOptions {
+    pub(crate) has_headers: bool,
+    pub(crate) delimiter: Option<u8>,
 }
 
 /// The different database protocols that can be supported, used to generate queries at runtime
@@ -461,13 +479,14 @@ impl Calculation {
     }
 }
 
+/// Expressions are the types of transformations that can be applied on a frame.
+/// Write and other 'actions' are not expressed as `Expression`s as they materialise
+/// the frame as an output.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Expression {
     Read(Computation),
     Compute(Box<Expression>, Computation),
     Join(Box<Expression>, Box<Expression>, JoinCriteria, Dataset),
-    Write(Box<Expression>),
-    Output,
 }
 
 impl Expression {
@@ -498,8 +517,6 @@ impl Expression {
                     )],
                 })
             }
-            Expression::Write(expr) => computations.append(&mut expr.unroll()),
-            Expression::Output => {}
         };
         computations
     }

@@ -1,6 +1,6 @@
 use crate::table::Column;
 use arrow::array;
-use arrow::array::{Array, ArrayRef, ArrayDataRef};
+use arrow::array::{Array, ArrayDataRef, ArrayRef};
 use arrow::datatypes::*;
 use std::sync::Arc;
 

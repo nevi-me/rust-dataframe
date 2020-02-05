@@ -4,9 +4,11 @@
 //! This is an experimental initial implementation
 
 use crate::dataframe::DataFrame;
+use crate::error::DataFrameError;
 use crate::expression::*;
 use crate::functions::scalar::ScalarFunctions as ScalarFn;
 use crate::table;
+
 use arrow::array::*;
 use arrow::datatypes::*;
 use arrow::error::ArrowError;
@@ -49,13 +51,15 @@ where
         .collect()
 }
 
-pub trait Evaluate {
+pub trait Evaluate: Sized {
     /// Evaluate a list of computations
     fn evaluate(self, comp: &Vec<Computation>) -> Self;
     /// Evaluate a calculation transformation
     fn calculate(self, calculation: &Calculation) -> Self;
     /// Evaluate a `Read` operation, returning the read data
     fn read(reader: &Reader) -> Self;
+    /// Evaluate a write operation, and write the data to the writer
+    fn write(self, writer: &Writer) -> Result<(), DataFrameError>;
 }
 
 impl Evaluate for DataFrame {
@@ -331,6 +335,14 @@ impl Evaluate for DataFrame {
                 t @ _ => unimplemented!("SQL Protocol {:?} not yet supported", t),
             },
         }
+    }
+    fn write(self, writer: &Writer) -> Result<(), DataFrameError> {
+        use DataSinkType::*;
+        match &writer.sink {
+            Csv(path, _options) => self.to_csv(&path),
+            Arrow(path) => self.to_arrow(&path),
+        }
+        .map_err(|arrow_err| arrow_err.into())
     }
 }
 
