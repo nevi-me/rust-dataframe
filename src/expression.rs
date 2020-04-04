@@ -43,12 +43,12 @@ pub struct Column {
 }
 
 impl Column {
-    fn name(&self) -> &str {
+    pub fn name(&self) -> &str {
         self.name.as_ref()
     }
 
     /// Rename column
-    fn rename(&self, name: &str) -> Self {
+    pub fn rename(&self, name: &str) -> Self {
         Self {
             name: name.to_owned(),
             column_type: self.column_type.clone(),
@@ -222,63 +222,68 @@ impl Dataset {
         })
     }
 
-    pub fn try_join(&self, other: &Self, on: (&str, &str)) -> Result<Self, DataFrameError> {
-        match (self.get_column(on.0), other.get_column(on.1)) {
-            (Some((_, a)), Some((_, b))) => {
-                if a.column_type == b.column_type {
-                    // join columns and deduplicate names
-                    let a = &self.columns;
-                    let b = &other.columns;
-                    let mut columns = vec![];
-                    let a_cols = a
-                        .iter()
-                        .map(|c: &Column| c.name.as_str())
-                        .collect::<Vec<&str>>();
-                    let b_cols = b
-                        .iter()
-                        .map(|c: &Column| c.name.as_str())
-                        .collect::<Vec<&str>>();
-                    for col in a {
-                        if b_cols.contains(&col.name.as_str()) {
-                            columns.push(col.rename(&format!("a.{}", col.name())))
-                        } else {
-                            columns.push(col.clone())
-                        }
+    pub fn try_join(&self, other: &Self, on: Vec<(&str, &str)>) -> Result<Self, DataFrameError> {
+        let resolved = on
+            .iter()
+            .map(|(a, b)| (self.get_column(a), other.get_column(b)))
+            .collect::<Vec<(Option<(usize, &Column)>, Option<(usize, &Column)>)>>();
+        let a = &self.columns;
+        let b = &other.columns;
+        let mut columns = vec![];
+        let a_cols = a
+            .iter()
+            .map(|c: &Column| c.name.as_str())
+            .collect::<Vec<&str>>();
+        let b_cols = b
+            .iter()
+            .map(|c: &Column| c.name.as_str())
+            .collect::<Vec<&str>>();
+        for (a, b) in resolved {
+            match (a, b) {
+                (Some((_, a)), Some((_, b))) => {
+                    if a.column_type != b.column_type {
+                        return Err(DataFrameError::ComputeError(
+                            "Join columns must have compatible types".to_owned(),
+                        ));
                     }
-                    for col in b {
-                        if a_cols.contains(&col.name.as_str()) {
-                            columns.push(col.rename(&format!("b.{}", col.name())))
-                        } else {
-                            columns.push(col.clone())
-                        }
-                    }
-                    println!("columns: {:?}", columns);
-                    Ok(Self {
-                        name: "joined_dataframe".to_owned(),
-                        columns,
-                    })
-                } else {
+                }
+                (None, Some(_)) => {
                     return Err(DataFrameError::ComputeError(
-                        "Join columns must have compatible types".to_owned(),
-                    ));
+                        "Join column does not exist in table A".to_owned(),
+                    ))
+                }
+                (Some(_), None) => {
+                    return Err(DataFrameError::ComputeError(
+                        "Join column does not exist in table B".to_owned(),
+                    ))
+                }
+                (None, None) => {
+                    return Err(DataFrameError::ComputeError(
+                        "Join columns do not exist in tables".to_owned(),
+                    ))
                 }
             }
-            (None, Some(_)) => {
-                return Err(DataFrameError::ComputeError(
-                    "Join column does not exist in table A".to_owned(),
-                ))
-            }
-            (Some(_), None) => {
-                return Err(DataFrameError::ComputeError(
-                    "Join column does not exist in table B".to_owned(),
-                ))
-            }
-            (None, None) => {
-                return Err(DataFrameError::ComputeError(
-                    "Join columns do not exist in tables".to_owned(),
-                ))
+        }
+
+        for col in a {
+            if b_cols.contains(&col.name.as_str()) {
+                columns.push(col.rename(&format!("a.{}", col.name())))
+            } else {
+                columns.push(col.clone())
             }
         }
+        for col in b {
+            if a_cols.contains(&col.name.as_str()) {
+                columns.push(col.rename(&format!("b.{}", col.name())))
+            } else {
+                columns.push(col.clone())
+            }
+        }
+        println!("columns: {:?}", columns);
+        Ok(Self {
+            name: "joined_dataframe".to_owned(),
+            columns,
+        })
     }
 }
 
@@ -315,7 +320,7 @@ pub struct Aggregation {
 pub struct JoinCriteria {
     pub join_type: JoinType,
     /// criteria are left and right column name references
-    pub criteria: (String, String),
+    pub criteria: Vec<(String, String)>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -473,7 +478,6 @@ impl Calculation {
                     .collect())
             }
             Array(a) => unimplemented!("array op"),
-            Limit(limit) => Ok(vec![Transformation::Limit(limit)]),
             Filter(cond) => Ok(vec![Transformation::Filter(cond)]),
         }
     }
@@ -634,7 +638,7 @@ pub enum Function {
     Cast,
     Rename,
     Filter(BooleanFilter),
-    Limit(usize),
+    // Limit(usize),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

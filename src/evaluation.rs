@@ -315,7 +315,6 @@ impl Evaluate for DataFrame {
                 &calculation.inputs.first().unwrap().name,
                 &calculation.output.name,
             ),
-            Function::Limit(limit) => self.limit(*limit),
             Function::Filter(filter) => self.filter(filter),
             expr @ _ => panic!("Function {:?} not supported", expr),
         }

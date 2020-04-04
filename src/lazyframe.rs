@@ -53,6 +53,10 @@ impl LazyFrame {
         unimplemented!()
     }
 
+    pub fn column(&self, name: &str) -> Option<(usize, &Column)> {
+        self.output.get_column(name)
+    }
+
     /// Create a column from the operation
     pub fn with_column(
         &self,
@@ -229,7 +233,11 @@ impl LazyFrame {
         self.output
             .try_join(
                 &other.output,
-                (&join_criteria.criteria.0, &join_criteria.criteria.1),
+                join_criteria
+                    .criteria
+                    .iter()
+                    .map(|(a, b)| (a.as_str(), b.as_str()))
+                    .collect::<Vec<(&str, &str)>>(),
             )
             .map(|dataset| {
                 let expression = Expression::Join(
@@ -412,7 +420,7 @@ mod tests {
             .join(
                 &frame2,
                 &JoinCriteria {
-                    criteria: ("town".to_owned(), "city".to_owned()),
+                    criteria: vec![("town".to_owned(), "city".to_owned())],
                     join_type: JoinType::InnerJoin,
                 },
             )
