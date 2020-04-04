@@ -9,12 +9,12 @@ pub enum DataFrameError {
     DivideByZero,
     IoError(String),
     NoneError,
-    ArrowError,
+    ArrowError(String),
 }
 
 impl From<ArrowError> for DataFrameError {
-    fn from(_error: ArrowError) -> Self {
-        DataFrameError::ArrowError
+    fn from(error: ArrowError) -> Self {
+        DataFrameError::ArrowError(error.to_string())
     }
 }
 
