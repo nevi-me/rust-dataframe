@@ -78,7 +78,7 @@ pub(crate) fn optimise(computations: &Vec<Computation>) -> Vec<Computation> {
                         // evaluate if select affects columns in calculate, and swap/drop where necessary
                         // TODO: write unit test for this optimisation
                         // TODO: complete the Drop implementation
-                        let (mut out, input_) = optimise_filter_calc(&input, c, &x[0], calc);
+                        let (mut out, input_) = optimise_project_calc(&input, c, &x[0], calc);
                         input = input_;
                         output.append(&mut out);
                     }
@@ -189,7 +189,7 @@ fn optimise_read(
     (output, mutated)
 }
 
-fn optimise_filter_calc(
+fn optimise_project_calc(
     input: &Computation,
     project: &Computation,
     x: &Transformation,
