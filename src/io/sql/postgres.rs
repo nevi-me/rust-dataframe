@@ -333,14 +333,12 @@ where
     // read flags
     let mut bytes: [u8; 4] = [0; 4];
     reader.read_exact(&mut bytes).unwrap();
-    let size = u32::from_be_bytes(bytes);
-    // dbg!(size);
+    let _size = u32::from_be_bytes(bytes);
 
     // header extension area length
     let mut bytes: [u8; 4] = [0; 4];
     reader.read_exact(&mut bytes).unwrap();
-    let size = u32::from_be_bytes(bytes);
-    // dbg!(size);
+    let _size = u32::from_be_bytes(bytes);
 
     read_rows(&mut reader, schema)
 }
@@ -370,6 +368,7 @@ where
             continue;
         }
         let size = size as usize;
+        // in almost all cases, the tuple length should equal schema field length
         assert_eq!(size, field_len);
         for i in 0..field_len {
             let mut bytes = [0u8; 4];
@@ -420,14 +419,17 @@ where
             let null_buffer = null_buffer.finish();
             match f.data_type() {
                 DataType::Boolean => {
-                    // let bools = vec![]
+                    let bools = b.iter().map(|v| v == &0).collect::<Vec<bool>>();
+                    let mut bool_buffer = BooleanBufferBuilder::new(bools.len());
+                    bool_buffer.append_slice(&bools[..]).unwrap();
+                    let bool_buffer = bool_buffer.finish();
                     let data = ArrayData::new(
                         f.data_type().clone(),
                         n.len(),
                         Some(null_count),
                         Some(null_buffer), // TODO: add null_bit_buffer
                         0,
-                        vec![Buffer::from(b)],
+                        vec![bool_buffer],
                         vec![],
                     );
                     arrays.push(Arc::new(BooleanArray::from(Arc::new(data))) as ArrayRef)
