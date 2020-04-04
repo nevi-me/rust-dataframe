@@ -59,12 +59,20 @@ impl SqlDataSource for Postgres {
     fn read_table(
         connection: &str,
         table_name: &str,
-        limit: usize,
+        limit: Option<usize>,
         batch_size: usize,
     ) -> Result<Vec<RecordBatch>, ()> {
         // read_table_by_rows(connection, table_name, limit, batch_size)
         // create connection
         let mut client = Client::connect(connection, NoTls).unwrap();
+        let total_rows = client
+            .query_one(
+                format!("select count(1) as freq from {}", table_name).as_str(),
+                &[],
+            )
+            .expect("Unable to get row count");
+        let total_rows: i64 = total_rows.get("freq");
+        let limit = limit.unwrap_or(std::usize::MAX).min(total_rows as usize);
         // get schema
         // TODO: reuse connection
         // TODO: split read into multiple batches, using limit and skip
@@ -72,8 +80,8 @@ impl SqlDataSource for Postgres {
         let reader = client
             .copy_out(
                 format!(
-                    "COPY (select * from {}) TO stdout with (format binary)",
-                    table_name
+                    "COPY (select * from {} limit {}) TO stdout with (format binary)",
+                    table_name, limit
                 )
                 .as_str(),
             )
@@ -667,11 +675,10 @@ mod tests {
         let result = Postgres::read_table(
             "postgres://postgres:password@localhost:5432/postgres",
             "arrow_data",
-            0,
+            None,
             1024,
         )
         .unwrap();
-        dbg!(result.len());
         let schema = result.get(0).map(|rb| rb.schema()).unwrap();
         // create dataframe and write the batches to it
         let table = crate::table::Table::from_record_batches(schema.clone(), result);

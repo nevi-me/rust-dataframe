@@ -413,7 +413,7 @@ impl DataFrame {
     /// a better execution model in future.
     pub fn from_sql_table(connection_string: &str, table_name: &str) -> Self {
         let batches =
-            sql::postgres::Postgres::read_table(connection_string, table_name, 0, 1024).unwrap();
+            sql::postgres::Postgres::read_table(connection_string, table_name, None, 1024).unwrap();
         if batches.is_empty() {
             DataFrame::empty()
         } else {

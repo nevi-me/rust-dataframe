@@ -7,7 +7,7 @@ pub trait SqlDataSource {
     fn read_table(
         connection: &str,
         table_name: &str,
-        limit: usize,
+        limit: Option<usize>,
         batch_size: usize,
     ) -> Result<Vec<RecordBatch>, ()>;
 }
