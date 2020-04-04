@@ -12,4 +12,10 @@ pub trait SqlDataSource {
         limit: Option<usize>,
         batch_size: usize,
     ) -> Result<Vec<RecordBatch>>;
+    fn read_query(
+        connection: &str,
+        query: &str,
+        limit: Option<usize>,
+        batch_size: usize,
+    ) -> Result<Vec<RecordBatch>>;
 }

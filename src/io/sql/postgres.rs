@@ -65,7 +65,6 @@ impl SqlDataSource for Postgres {
         limit: Option<usize>,
         batch_size: usize,
     ) -> crate::error::Result<Vec<RecordBatch>> {
-        // read_table_by_rows(connection, table_name, limit, batch_size)
         // create connection
         let mut client = Client::connect(connection, NoTls).unwrap();
         let total_rows = client
@@ -80,17 +79,56 @@ impl SqlDataSource for Postgres {
         // TODO: reuse connection
         // TODO: split read into multiple batches, using limit and skip
         let schema = Postgres::get_table_schema(connection, table_name)?;
-        let reader = client
-            .copy_out(
-                format!(
-                    "COPY (select * from {} limit {}) TO stdout with (format binary)",
-                    table_name, limit
-                )
-                .as_str(),
-            )
-            .unwrap();
+        let reader = get_binary_reader(
+            &mut client,
+            format!("select * from {} limit {}", table_name, limit).as_str(),
+        )
+        .unwrap();
         read_from_binary(reader, &schema).map(|batch| vec![batch])
     }
+
+    fn read_query(
+        connection: &str,
+        query: &str,
+        limit: Option<usize>,
+        batch_size: usize,
+    ) -> crate::error::Result<Vec<RecordBatch>> {
+        // create connection
+        let mut client = Client::connect(connection, NoTls).unwrap();
+        let total_rows = client
+            .query_one(
+                format!("select count(1) as freq from ({}) a", query).as_str(),
+                &[],
+            )
+            .expect("Unable to get row count");
+        let total_rows: i64 = total_rows.get("freq");
+        let limit = limit.unwrap_or(std::usize::MAX).min(total_rows as usize);
+        // get schema
+        // TODO: reuse connection
+        // TODO: split read into multiple batches, using limit and skip
+        let row = client
+            .query_one(
+                format!("select a.* from ({}) a limit 1", query).as_str(),
+                &[],
+            )
+            .unwrap();
+        let schema = row_to_schema(&row).expect("Unable to get schema from row");
+        let reader = get_binary_reader(
+            &mut client,
+            format!("select a.* from ({}) a limit {}", query, limit).as_str(),
+        )
+        .unwrap();
+        read_from_binary(reader, &schema).map(|batch| vec![batch])
+    }
+}
+
+fn get_binary_reader<'a>(
+    client: &'a mut Client,
+    query: &str,
+) -> Result<postgres::CopyOutReader<'a>, ()> {
+    client
+        .copy_out(format!("COPY ({}) TO stdout with (format binary)", query).as_str())
+        .map_err(|e| eprintln!("Error: {:?}", e))
 }
 
 struct PgDataType {
@@ -685,5 +723,22 @@ mod tests {
         let table = crate::table::Table::from_record_batches(schema.clone(), result);
         let df = crate::dataframe::DataFrame::from_table(table);
         df.to_csv("target/debug/arrow_data_from_sql.csv").unwrap();
+    }
+
+    #[test]
+    fn test_read_query() {
+        let result = Postgres::read_query(
+            "postgres://postgres:password@localhost:5432/postgres",
+            "select * from arrow_data",
+            None,
+            1024,
+        )
+        .unwrap();
+        let schema = result.get(0).map(|rb| rb.schema()).unwrap();
+        // create dataframe and write the batches to it
+        let table = crate::table::Table::from_record_batches(schema.clone(), result);
+        let df = crate::dataframe::DataFrame::from_table(table);
+        df.to_csv("target/debug/arrow_data_from_sql_query.csv")
+            .unwrap();
     }
 }
