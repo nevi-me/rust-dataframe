@@ -1,18 +1,22 @@
 //! Data source evaluators and readers
 
-use crate::expression::{DataSourceType, Dataset, Reader};
 use arrow::csv::{Reader as CsvReader, ReaderBuilder as CsvBuilder};
-use arrow::error::ArrowError;
 use arrow::ipc::reader::FileReader as ArrowFileReader;
 use std::fs::File;
 
+use crate::error::{DataFrameError, Result};
+use crate::expression::{DataSourceType, Dataset, Reader, SqlDatabase};
+use crate::io::sql::postgres;
+use crate::io::sql::SqlDataSource;
+
 pub trait DataSourceEval {
-    fn get_dataset(&self) -> Result<Dataset, ArrowError>;
+    fn get_dataset(&self) -> Result<Dataset>;
 }
 
 impl DataSourceEval for Reader {
-    fn get_dataset(&self) -> Result<Dataset, ArrowError> {
+    fn get_dataset(&self) -> Result<Dataset> {
         use DataSourceType::*;
+        use SqlDatabase::*;
         match &self.source {
             Csv(path, options) => {
                 let mut builder = CsvBuilder::new()
@@ -48,7 +52,21 @@ impl DataSourceEval for Reader {
                         .collect(),
                 })
             }
-            Sql(table, options) => panic!(),
+            Sql(table, options) => match options.db {
+                Postgres => Ok(Dataset {
+                    name: table.clone(),
+                    columns: postgres::Postgres::get_table_schema(
+                        options.connection_string.as_str(),
+                        table.as_str(),
+                    )?
+                    .fields()
+                    .iter()
+                    .map(|f| f.clone().into())
+                    .collect(),
+                }),
+                MsSql => unimplemented!("MSSQL data source not yet implemented"),
+                MySql => unimplemented!("MySQL data source not yet implemented"),
+            },
         }
     }
 }

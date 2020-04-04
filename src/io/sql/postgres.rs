@@ -15,6 +15,7 @@ use chrono::Timelike;
 use postgres::types::*;
 use postgres::{Client, NoTls, Row};
 
+use crate::error::DataFrameError;
 use crate::io::sql::SqlDataSource;
 
 const MAGIC: &[u8] = b"PGCOPY\n\xff\r\n\0";
@@ -22,12 +23,14 @@ const MAGIC: &[u8] = b"PGCOPY\n\xff\r\n\0";
 pub struct Postgres;
 
 impl SqlDataSource for Postgres {
-    fn get_table_schema(connection_string: &str, table_name: &str) -> Result<Schema, ()> {
+    fn get_table_schema(connection_string: &str, table_name: &str) -> crate::error::Result<Schema> {
         let (table_schema, table_name) = if table_name.contains(".") {
             let split = table_name.split(".").collect::<Vec<&str>>();
             if split.len() != 2 {
-                eprintln!("table name must have schema and table name only, or just table name");
-                return Err(());
+                return Err(DataFrameError::IoError(
+                    "table name must have schema and table name only, or just table name"
+                        .to_string(),
+                ));
             }
             (
                 format!("table_schema = '{}'", split[0]),
@@ -53,7 +56,7 @@ impl SqlDataSource for Postgres {
             })
             .map(|t| Field::try_from(t))
             .collect();
-        Ok(Schema::new(fields?))
+        Ok(Schema::new(fields.unwrap()))
     }
 
     fn read_table(
@@ -61,7 +64,7 @@ impl SqlDataSource for Postgres {
         table_name: &str,
         limit: Option<usize>,
         batch_size: usize,
-    ) -> Result<Vec<RecordBatch>, ()> {
+    ) -> crate::error::Result<Vec<RecordBatch>> {
         // read_table_by_rows(connection, table_name, limit, batch_size)
         // create connection
         let mut client = Client::connect(connection, NoTls).unwrap();
@@ -86,9 +89,7 @@ impl SqlDataSource for Postgres {
                 .as_str(),
             )
             .unwrap();
-        read_from_binary(reader, &schema)
-            .map(|batch| vec![batch])
-            .map_err(|e| eprintln!("Dataframe Error: {:?}", e))
+        read_from_binary(reader, &schema).map(|batch| vec![batch])
     }
 }
 
