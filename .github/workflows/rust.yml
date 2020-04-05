@@ -12,7 +12,7 @@ jobs:
     - uses: danielweller-swp/postgresql-action@v1
       with:
         postgresql version: '11'
-        postgresql init scripts: 'sql/postgresql'
+        postgresql init scripts: sql/postgresql
         postgresql user: 'postgres'
         postgresql password: 'password' 
     - uses: actions-rs/toolchain@v1
