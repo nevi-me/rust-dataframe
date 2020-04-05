@@ -520,62 +520,52 @@ mod tests {
         assert_eq!(37, dataframe.num_rows());
     }
 
-    #[test]
-    fn read_postgres_table_to_dataframe() {
-        // table created with:
-        // create table arrow_data
-        // (
-        //     int32 integer,
-        //     bool boolean,
-        //     int64 bigint,
-        //     string varchar(255),
-        //     timestamp timestamp,
-        //     time time
-        // );
-        let dataframe = DataFrame::from_sql_table(
-            "postgres://postgres:password@localhost:5432/postgres",
-            "public.arrow_data",
-        );
-        assert_eq!(6, dataframe.num_columns());
-        assert_eq!(1, dataframe.num_rows());
+    // #[test]
+    // fn read_postgres_table_to_dataframe() {
+    //     let dataframe = DataFrame::from_sql_table(
+    //         "postgres://postgres:password@localhost:5432/postgres",
+    //         "public.arrow_data_types",
+    //     );
+    //     assert_eq!(6, dataframe.num_columns());
+    //     assert_eq!(1, dataframe.num_rows());
 
-        let col_1 = dataframe.column(0);
-        let col_2 = dataframe.column(1);
-        let col_3 = dataframe.column(2);
-        let col_4 = dataframe.column(3);
-        let col_5 = dataframe.column(4);
-        let col_6 = dataframe.column(5);
-        assert_eq!(
-            "PrimitiveArray<Int32>\n[\n  1,\n]",
-            format!("{:?}", Int32Array::from(col_1.data().chunks()[0].data()))
-        );
-        assert_eq!(
-            "PrimitiveArray<Boolean>\n[\n  true,\n]",
-            format!("{:?}", BooleanArray::from(col_2.data().chunks()[0].data()))
-        );
-        assert_eq!(
-            "PrimitiveArray<Int64>\n[\n  null,\n]",
-            format!("{:?}", Int64Array::from(col_3.data().chunks()[0].data()))
-        );
-        assert_eq!(
-            "lorem ipsum",
-            StringArray::from(col_4.data().chunks()[0].data()).value(0)
-        );
-        assert_eq!(
-            "PrimitiveArray<Timestamp(Millisecond)>\n[\n  2019-04-19T10:41:13.591,\n]",
-            format!(
-                "{:?}",
-                TimestampMillisecondArray::from(col_5.data().chunks()[0].data())
-            )
-        );
-        assert_eq!(
-            "PrimitiveArray<Time64(Microsecond)>\n[\n  12:45:00,\n]",
-            format!(
-                "{:?}",
-                Time64MicrosecondArray::from(col_6.data().chunks()[0].data())
-            )
-        );
-    }
+    //     let col_1 = dataframe.column(0);
+    //     let col_2 = dataframe.column(1);
+    //     let col_3 = dataframe.column(2);
+    //     let col_4 = dataframe.column(3);
+    //     let col_5 = dataframe.column(4);
+    //     let col_6 = dataframe.column(5);
+    //     assert_eq!(
+    //         "PrimitiveArray<Int32>\n[\n  1,\n]",
+    //         format!("{:?}", Int32Array::from(col_1.data().chunks()[0].data()))
+    //     );
+    //     assert_eq!(
+    //         "PrimitiveArray<Boolean>\n[\n  true,\n]",
+    //         format!("{:?}", BooleanArray::from(col_2.data().chunks()[0].data()))
+    //     );
+    //     assert_eq!(
+    //         "PrimitiveArray<Int64>\n[\n  null,\n]",
+    //         format!("{:?}", Int64Array::from(col_3.data().chunks()[0].data()))
+    //     );
+    //     assert_eq!(
+    //         "lorem ipsum",
+    //         StringArray::from(col_4.data().chunks()[0].data()).value(0)
+    //     );
+    //     assert_eq!(
+    //         "PrimitiveArray<Timestamp(Millisecond)>\n[\n  2019-04-19T10:41:13.591,\n]",
+    //         format!(
+    //             "{:?}",
+    //             TimestampMillisecondArray::from(col_5.data().chunks()[0].data())
+    //         )
+    //     );
+    //     assert_eq!(
+    //         "PrimitiveArray<Time64(Microsecond)>\n[\n  12:45:00,\n]",
+    //         format!(
+    //             "{:?}",
+    //             Time64MicrosecondArray::from(col_6.data().chunks()[0].data())
+    //         )
+    //     );
+    // }
 
     #[test]
     fn dataframe_ops() {
