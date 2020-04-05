@@ -198,7 +198,7 @@ fn pg_to_arrow_type(dt: &Type) -> Option<DataType> {
     dbg!(&dt);
     match dt {
         &Type::BOOL => Some(DataType::Boolean),
-        &Type::BYTEA | &Type::CHAR | &Type::NAME | &Type::TEXT | &Type::VARCHAR => {
+        &Type::BYTEA | &Type::CHAR | &Type::BPCHAR | &Type::NAME | &Type::TEXT | &Type::VARCHAR => {
             Some(DataType::Utf8)
         }
         &Type::INT2 => Some(DataType::Int16),
@@ -230,7 +230,10 @@ fn pg_to_arrow_type(dt: &Type) -> Option<DataType> {
         //        &TINTERVAL_ARRAY => None,
         &Type::DATE => Some(DataType::Date32(DateUnit::Day)),
         &Type::TIME => Some(DataType::Time64(TimeUnit::Microsecond)),
-        &Type::TIMESTAMP => Some(DataType::Timestamp(TimeUnit::Microsecond, None)),
+        &Type::INTERVAL => Some(DataType::Interval(IntervalUnit::DayTime)),
+        &Type::TIMESTAMP | &Type::TIMESTAMPTZ => {
+            Some(DataType::Timestamp(TimeUnit::Microsecond, None))
+        }
         //        &TIMESTAMP_ARRAY => None,
         &Type::DATE_ARRAY => Some(DataType::List(Box::new(DataType::Date32(DateUnit::Day)))),
         //        &TIME_ARRAY => None,

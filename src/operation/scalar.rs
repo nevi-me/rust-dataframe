@@ -333,7 +333,7 @@ mod tests {
         let add = AddOperation::transform(vec![a, b], None, None).unwrap();
 
         assert_eq!(
-            "[Operation { name: \"cast\", inputs: [Column { name: \"b\", column_type: Scalar(Int32) }], output: Column { name: \"b\", column_type: Scalar(Int64) }, function: Cast }, Operation { name: \"add\", inputs: [Column { name: \"a\", column_type: Scalar(Int64) }, Column { name: \"b\", column_type: Scalar(Int64) }], output: Column { name: \"add(a, b)\", column_type: Scalar(Int64) }, function: Scalar(Add) }]",
+            "[Calculation { name: \"cast\", inputs: [Column { name: \"b\", column_type: Scalar(Int32) }], output: Column { name: \"b\", column_type: Scalar(Int64) }, function: Cast }, Calculation { name: \"add\", inputs: [Column { name: \"a\", column_type: Scalar(Int64) }, Column { name: \"b\", column_type: Scalar(Int64) }], output: Column { name: \"add(a, b)\", column_type: Scalar(Int64) }, function: Scalar(Add) }]",
             format!("{:?}", add)
         );
     }
