@@ -1,13 +1,15 @@
 # Rust DataFrame
 
-A dataframe implementation in Rust.
+A dataframe implementation in Rust, powered by Apache Arrow.
 
-This project currently exists as a prototype that uses the Apache Arrow Rust library. 
-Its goal is to act as an additional user of Arrow as we develop the library, in order to pick up potential difficulties from Arrow's downstream consumers (this dataframe being one).
+## What is a dataframe?
+
+A dataframe is a 2-dimensional tabular data structure that is often used for computations and other data transformations.
+A dataframe often has columns of the same data type, similar to a SQL table.
 
 ## Functionality
 
-This project is inspired by Pandas and other dataframe libraries, but specifically *borrows* functions from Apache Spark.
+This project is inspired by Pandas and other dataframe libraries, but specifically currently *borrows* functions from Apache Spark.
 
 It mainly focuses on computation, and aims to include:
 
@@ -33,10 +35,7 @@ The ongoing experiments on lazy evaluation are in the `master` branch, and we wo
 
 ## Non-Goals
 
-Although we use Apache Spark as a reference, we do not intend on:
-
-- Creating deferred computation kernels (we'll leverage Arrow Rust)
-- Creating distributed computation kernels
+Although we use Apache Spark as a reference, we do not intend on supporting distributed computation beyond a single machine.
 
 Spark is a convenience to reduce bikeshedding, but we will probably provide a more Rust idiomatic API in future.
 
@@ -44,13 +43,12 @@ Spark is a convenience to reduce bikeshedding, but we will probably provide a mo
 
 ### Roadmap
 
-- [ ] Lazy evaluation (Q1 2020)
+- [ ] Lazy evaluation (H1 2020)
   - [ ] Aggregations
   - [ ] Joins
   - [ ] Sorting
-- [ ] Adding compute `fn`s (Q2 2020)
-- [ ] SQL support (Q3 2020) [Uncertain if needed]
-- [ ] Python bindings (Q4 2020)
+- [ ] Adding compute `fn`s (H1 2020)
+- [ ] Python bindings (H2 2020)
 
 ### IO
 
@@ -90,7 +88,7 @@ For now, we're trying to support CSV, JSON, and perhaps other simpler file forma
   - [X] Select subset of columns, drop columns
   - [X] Add or remove columns
   - [X] Rename columns
-  - [-] Create dataframe from record batches (a `Vec<RecordBatch>` as well as an iterator)
+  - [X] Create dataframe from record batches (a `Vec<RecordBatch>` as well as an iterator)
   - [ ] Sort dataframes
   - [ ] Grouped operations
   - [ ] Filter dataframes
@@ -101,7 +99,7 @@ For now, we're trying to support CSV, JSON, and perhaps other simpler file forma
   - [X] Basic arithmetic (add, mul, divide, subtract) **Implemented from Arrow**
   - [ ] Date/Time functions
   - [ ] String functions
-    - [ ] Basic string manipulation
+    - [-] Basic string manipulation
     - [ ] Regular expressions (leveraging `regex`)
     - [ ] Casting to and from strings (using Arrow compute's `cast` kernel)
   - [ ] Crypto/hash functions (md5, crc32, sha{x}, ...)
@@ -126,8 +124,9 @@ For now, we're trying to support CSV, JSON, and perhaps other simpler file forma
 We plan on providing simple benchmarks in the near future. The current blockers are:
 
 - [ ] IO
-  - [ ] Text format (CSV)
+  - [X] Text format (CSV)
   - [X] Binary format (Arrow IPC)
-- [ ] Lazy operations
+  - [ ] SQL
+- [-] Lazy operations
 - [ ] Aggregation
 - [ ] Joins
