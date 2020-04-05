@@ -9,6 +9,9 @@ jobs:
 
     steps:
     - uses: actions/checkout@master
+    - name: Dump docker logs on failure
+      if: failure()
+      uses: jwalton/gh-docker-logs@v1
     - uses: danielweller-swp/postgresql-action@v1
       with:
         postgresql version: '11'
