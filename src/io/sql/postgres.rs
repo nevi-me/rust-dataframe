@@ -153,7 +153,13 @@ impl TryFrom<PgDataType> for Field {
                 _ => Err(()),
             },
             "bigint" => Ok(DataType::Int64),
-            "\"char\"" => Ok(DataType::UInt8),
+            "\"char\"" | "character" => {
+                if field.char_max_length == Some(1) {
+                    Ok(DataType::UInt8)
+                } else {
+                    Ok(DataType::Binary)
+                }
+            }
             // "anyarray" | "ARRAY" => Err(()),
             "boolean" => Ok(DataType::Boolean),
             "bytea" => Ok(DataType::Binary),
@@ -166,7 +172,7 @@ impl TryFrom<PgDataType> for Field {
             "numeric" => Ok(DataType::Float64),
             // "oid" => Err(()),
             "real" => Ok(DataType::Float32),
-            "smallint" => Ok(DataType::Int8),
+            "smallint" => Ok(DataType::Int16),
             "text" => Ok(DataType::Utf8),
             "time without time zone" => Ok(DataType::Time64(TimeUnit::Microsecond)), // TODO: use datetime_precision to determine correct type
             "timestamp with time zone" => Ok(DataType::Timestamp(TimeUnit::Microsecond, None)),
@@ -189,9 +195,10 @@ impl TryFrom<PgDataType> for Field {
 ///
 /// Not all types are covered, but can be easily added
 fn pg_to_arrow_type(dt: &Type) -> Option<DataType> {
+    dbg!(&dt);
     match dt {
         &Type::BOOL => Some(DataType::Boolean),
-        &Type::BYTEA | &Type::CHAR | &Type::NAME | &Type::TEXT | &Type::VARCHAR => {
+        &Type::BYTEA | &Type::CHAR | &Type::BPCHAR | &Type::NAME | &Type::TEXT | &Type::VARCHAR => {
             Some(DataType::Utf8)
         }
         &Type::INT2 => Some(DataType::Int16),
@@ -223,7 +230,10 @@ fn pg_to_arrow_type(dt: &Type) -> Option<DataType> {
         //        &TINTERVAL_ARRAY => None,
         &Type::DATE => Some(DataType::Date32(DateUnit::Day)),
         &Type::TIME => Some(DataType::Time64(TimeUnit::Microsecond)),
-        &Type::TIMESTAMP => Some(DataType::Timestamp(TimeUnit::Microsecond, None)),
+        &Type::INTERVAL => Some(DataType::Interval(IntervalUnit::DayTime)),
+        &Type::TIMESTAMP | &Type::TIMESTAMPTZ => {
+            Some(DataType::Timestamp(TimeUnit::Microsecond, None))
+        }
         //        &TIMESTAMP_ARRAY => None,
         &Type::DATE_ARRAY => Some(DataType::List(Box::new(DataType::Date32(DateUnit::Day)))),
         //        &TIME_ARRAY => None,
@@ -440,6 +450,7 @@ where
                 null_buffers[i].push(false);
             } else {
                 null_buffers[i].push(true);
+                dbg!((schema.field(i), col_length));
                 // big endian data, needs to be converted to little endian
                 let mut data = read_col(
                     &mut reader,
@@ -587,11 +598,11 @@ fn read_col<R: Read>(reader: &mut R, data_type: &DataType, length: usize) -> Res
         DataType::Float16 => Err(()),
         DataType::Float32 => read_f32(reader),
         DataType::Float64 => read_f64(reader),
-        DataType::Timestamp(_, _) => read_time64(reader),
+        DataType::Timestamp(_, _) => read_timestamp64(reader),
         DataType::Date32(_) => read_date32(reader),
         DataType::Date64(_) => unreachable!(),
         DataType::Time32(_) => read_i32(reader),
-        DataType::Time64(_) => read_i64(reader),
+        DataType::Time64(_) => read_time64(reader),
         DataType::Duration(_) => read_i64(reader),
         DataType::Interval(_) => read_i64(reader),
         DataType::Binary => read_string(reader, length), // TODO we'd need the length of the binary
@@ -688,10 +699,19 @@ fn read_date32<R: Read>(reader: &mut R) -> Result<Vec<u8>, ()> {
         .map_err(|e| eprintln!("Error: {:?}", e))
 }
 
-fn read_time64<R: Read>(reader: &mut R) -> Result<Vec<u8>, ()> {
+fn read_timestamp64<R: Read>(reader: &mut R) -> Result<Vec<u8>, ()> {
     reader
         .read_i64::<NetworkEndian>()
         .map(|v| { 946684800000000 + v }.to_le_bytes().to_vec())
+        .map_err(|e| eprintln!("Error: {:?}", e))
+}
+
+/// we do not support time with time zone as it is 48-bit,
+/// time without a zone is 32-bit but arrow only supports 64-bit at microsecond resolution
+fn read_time64<R: Read>(reader: &mut R) -> Result<Vec<u8>, ()> {
+    reader
+        .read_i32::<NetworkEndian>()
+        .map(|v| { v as i64 }.to_le_bytes().to_vec())
         .map_err(|e| eprintln!("Error: {:?}", e))
 }
 
@@ -713,7 +733,7 @@ mod tests {
     fn test_read_table() {
         let result = Postgres::read_table(
             "postgres://postgres:password@localhost:5432/postgres",
-            "arrow_data",
+            "arrow_data_types",
             None,
             1024,
         )
@@ -729,7 +749,7 @@ mod tests {
     fn test_read_query() {
         let result = Postgres::read_query(
             "postgres://postgres:password@localhost:5432/postgres",
-            "select * from arrow_data",
+            "select * from arrow_data_types",
             None,
             1024,
         )
