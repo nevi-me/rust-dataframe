@@ -9,9 +9,10 @@ jobs:
 
     steps:
     - uses: actions/checkout@master
-    - uses: harmon758/postgresql-action@v1
+    - uses: danielweller-swp/postgresql-action@v1
       with:
         postgresql version: '11'
+        postgresql init scripts: 'sql/postgres'
         postgresql user: 'postgres'
         postgresql password: 'password' 
     - uses: actions-rs/toolchain@v1
