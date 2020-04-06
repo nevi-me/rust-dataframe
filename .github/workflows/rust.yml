@@ -1,6 +1,6 @@
 name: Rust
 
-on: [push]
+on: [push, pull_request]
 
 jobs:
   build:
@@ -9,11 +9,21 @@ jobs:
 
     steps:
     - uses: actions/checkout@master
+    - uses: danielweller-swp/postgresql-action@v2
+      with:
+        postgresql version: '11'
+        postgresql init scripts: 'sql/postgresql'
+        postgresql user: 'postgres'
+        postgresql password: 'password' 
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: nightly
         override: true
+        components: rustfmt  
     - name: Build
       run: cargo build --verbose
     - name: Run tests
       run: cargo test --verbose
+    - name: Dump docker logs on failure
+      if: failure()
+      uses: jwalton/gh-docker-logs@v1
