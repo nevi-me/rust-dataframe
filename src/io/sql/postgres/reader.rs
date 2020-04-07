@@ -1,10 +1,5 @@
-//! An experimental interface for reading and writing record batches to and from PostgreSQL
-
 use std::convert::TryFrom;
-use std::{
-    io::{BufRead, BufReader, Cursor, Read, Seek},
-    sync::Arc,
-};
+use std::{io::Read, sync::Arc};
 
 use arrow::array::*;
 use arrow::buffer::Buffer;
@@ -15,12 +10,9 @@ use chrono::Timelike;
 use postgres::types::*;
 use postgres::{Client, NoTls, Row};
 
+use super::{Postgres, EPOCH_DAYS, EPOCH_MICROS, MAGIC};
 use crate::error::DataFrameError;
 use crate::io::sql::SqlDataSource;
-
-const MAGIC: &[u8] = b"PGCOPY\n\xff\r\n\0";
-
-pub struct Postgres;
 
 impl SqlDataSource for Postgres {
     fn get_table_schema(connection_string: &str, table_name: &str) -> crate::error::Result<Schema> {
@@ -82,8 +74,7 @@ impl SqlDataSource for Postgres {
         let reader = get_binary_reader(
             &mut client,
             format!("select * from {} limit {}", table_name, limit).as_str(),
-        )
-        .unwrap();
+        )?;
         read_from_binary(reader, &schema).map(|batch| vec![batch])
     }
 
@@ -116,8 +107,7 @@ impl SqlDataSource for Postgres {
         let reader = get_binary_reader(
             &mut client,
             format!("select a.* from ({}) a limit {}", query, limit).as_str(),
-        )
-        .unwrap();
+        )?;
         read_from_binary(reader, &schema).map(|batch| vec![batch])
     }
 }
@@ -125,10 +115,8 @@ impl SqlDataSource for Postgres {
 fn get_binary_reader<'a>(
     client: &'a mut Client,
     query: &str,
-) -> Result<postgres::CopyOutReader<'a>, ()> {
-    client
-        .copy_out(format!("COPY ({}) TO stdout with (format binary)", query).as_str())
-        .map_err(|e| eprintln!("Error: {:?}", e))
+) -> crate::error::Result<postgres::CopyOutReader<'a>> {
+    Ok(client.copy_out(format!("COPY ({}) TO stdout with (format binary)", query).as_str())?)
 }
 
 struct PgDataType {
@@ -145,7 +133,7 @@ impl TryFrom<PgDataType> for Field {
     type Error = ();
     fn try_from(field: PgDataType) -> Result<Self, Self::Error> {
         let data_type = match field.data_type.as_str() {
-            "integer" => match field.numeric_precision {
+            "int" | "integer" => match field.numeric_precision {
                 Some(8) => Ok(DataType::Int8),
                 Some(16) => Ok(DataType::Int16),
                 Some(32) => Ok(DataType::Int32),
@@ -174,9 +162,11 @@ impl TryFrom<PgDataType> for Field {
             "real" => Ok(DataType::Float32),
             "smallint" => Ok(DataType::Int16),
             "text" => Ok(DataType::Utf8),
-            "time without time zone" => Ok(DataType::Time64(TimeUnit::Microsecond)), // TODO: use datetime_precision to determine correct type
+            "time" | "time without time zone" => Ok(DataType::Time64(TimeUnit::Microsecond)), // TODO: use datetime_precision to determine correct type
             "timestamp with time zone" => Ok(DataType::Timestamp(TimeUnit::Microsecond, None)),
-            "timestamp without time zone" => Ok(DataType::Timestamp(TimeUnit::Microsecond, None)),
+            "timestamp" | "timestamp without time zone" => {
+                Ok(DataType::Timestamp(TimeUnit::Microsecond, None))
+            }
             "uuid" => Ok(DataType::Binary), // TODO: use a more specialised data type
             t @ _ => {
                 eprintln!("Conversion not set for data type: {:?}", t);
@@ -195,7 +185,6 @@ impl TryFrom<PgDataType> for Field {
 ///
 /// Not all types are covered, but can be easily added
 fn pg_to_arrow_type(dt: &Type) -> Option<DataType> {
-    dbg!(&dt);
     match dt {
         &Type::BOOL => Some(DataType::Boolean),
         &Type::BYTEA | &Type::CHAR | &Type::BPCHAR | &Type::NAME | &Type::TEXT | &Type::VARCHAR => {
@@ -376,7 +365,7 @@ fn row_to_schema(row: &postgres::Row) -> Result<Schema, ()> {
 
 fn read_from_binary<R>(mut reader: R, schema: &Schema) -> crate::error::Result<RecordBatch>
 where
-    R: Read + BufRead,
+    R: Read,
 {
     // read signature
     let mut bytes = [0u8; 11];
@@ -403,7 +392,7 @@ where
 /// Read row tuples
 fn read_rows<R>(mut reader: R, schema: &Schema) -> crate::error::Result<RecordBatch>
 where
-    R: Read + BufRead,
+    R: Read,
 {
     let mut is_done = false;
     let field_len = schema.fields().len();
@@ -695,14 +684,14 @@ fn read_f64<R: Read>(reader: &mut R) -> Result<Vec<u8>, ()> {
 fn read_date32<R: Read>(reader: &mut R) -> Result<Vec<u8>, ()> {
     reader
         .read_i32::<NetworkEndian>()
-        .map(|v| { 10957 + v }.to_le_bytes().to_vec())
+        .map(|v| { EPOCH_DAYS + v }.to_le_bytes().to_vec())
         .map_err(|e| eprintln!("Error: {:?}", e))
 }
 
 fn read_timestamp64<R: Read>(reader: &mut R) -> Result<Vec<u8>, ()> {
     reader
         .read_i64::<NetworkEndian>()
-        .map(|v| { 946684800000000 + v }.to_le_bytes().to_vec())
+        .map(|v| { EPOCH_MICROS + v }.to_le_bytes().to_vec())
         .map_err(|e| eprintln!("Error: {:?}", e))
 }
 

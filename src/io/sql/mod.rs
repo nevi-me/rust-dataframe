@@ -1,10 +1,11 @@
 pub mod postgres;
 
+use std::sync::Arc;
+
 use arrow::datatypes::Schema;
 use arrow::record_batch::RecordBatch;
 
 use crate::error::Result;
-use std::sync::Arc;
 pub trait SqlDataSource {
     fn get_table_schema(connection: &str, table_name: &str) -> Result<Schema>;
     fn read_table(
