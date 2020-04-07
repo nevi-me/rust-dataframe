@@ -1,5 +1,7 @@
 pub mod postgres;
 
+use std::sync::Arc;
+
 use arrow::datatypes::Schema;
 use arrow::record_batch::RecordBatch;
 
@@ -18,4 +20,10 @@ pub trait SqlDataSource {
         limit: Option<usize>,
         batch_size: usize,
     ) -> Result<Vec<RecordBatch>>;
+}
+
+pub trait SqlDataSink {
+    fn create_table(connection: &str, table_name: &str, schema: &Arc<Schema>) -> Result<()>;
+    fn write_to_table(connection: &str, table_name: &str, batches: &Vec<RecordBatch>)
+        -> Result<()>;
 }

@@ -1,5 +1,6 @@
-use arrow::error::ArrowError;
 use std::error::Error;
+
+use arrow::error::ArrowError;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum DataFrameError {
@@ -10,6 +11,7 @@ pub enum DataFrameError {
     IoError(String),
     NoneError,
     ArrowError(String),
+    SqlError(String),
 }
 
 impl From<ArrowError> for DataFrameError {
@@ -33,6 +35,12 @@ impl From<std::option::NoneError> for DataFrameError {
 impl From<std::str::Utf8Error> for DataFrameError {
     fn from(error: ::std::str::Utf8Error) -> Self {
         DataFrameError::ParseError(error.to_string())
+    }
+}
+
+impl From<postgres::error::Error> for DataFrameError {
+    fn from(error: postgres::error::Error) -> Self {
+        DataFrameError::SqlError(error.to_string())
     }
 }
 
