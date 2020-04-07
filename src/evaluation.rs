@@ -325,7 +325,7 @@ impl Evaluate for DataFrame {
             // TODO build with options, good first issue
             Csv(path, options) => DataFrame::from_csv(&path, None),
             Json(path) => DataFrame::from_json(&path, None),
-            Parquet(path) => unimplemented!("Parquet data sources not yet supported"),
+            Parquet(path) => DataFrame::from_parquet(&path).expect("Unable to read Parquet file"),
             Arrow(path) => DataFrame::from_arrow(&path).unwrap(),
             Sql(table, options) => match &options.db {
                 SqlDatabase::Postgres => {
