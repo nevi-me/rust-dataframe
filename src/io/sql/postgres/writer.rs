@@ -38,8 +38,8 @@ impl SqlDataSink for Postgres {
         Ok(())
     }
     fn write_to_table(
-        connection: &std::primitive::str,
-        table_name: &std::primitive::str,
+        connection: &str,
+        table_name: &str,
         batches: &Vec<RecordBatch>,
     ) -> Result<()> {
         if batches.is_empty() {
@@ -310,11 +310,7 @@ impl WriteToBinary for BooleanArray {
 }
 
 impl WriteToBinary for UInt8Array {
-    fn write_to_binary<W: Write>(
-        &self,
-        writer: &mut W,
-        index: std::primitive::usize,
-    ) -> Result<()> {
+    fn write_to_binary<W: Write>(&self, writer: &mut W, index: usize) -> Result<()> {
         write_length_to_binary(writer, std::mem::size_of::<u8>())?;
         writer.write_u8(self.value(index))?;
         Ok(())
@@ -322,11 +318,7 @@ impl WriteToBinary for UInt8Array {
 }
 
 impl WriteToBinary for Int8Array {
-    fn write_to_binary<W: Write>(
-        &self,
-        writer: &mut W,
-        index: std::primitive::usize,
-    ) -> Result<()> {
+    fn write_to_binary<W: Write>(&self, writer: &mut W, index: usize) -> Result<()> {
         write_length_to_binary(writer, std::mem::size_of::<i8>())?;
         writer.write_i8(self.value(index))?;
         Ok(())
@@ -334,11 +326,7 @@ impl WriteToBinary for Int8Array {
 }
 
 impl WriteToBinary for Int16Array {
-    fn write_to_binary<W: Write>(
-        &self,
-        writer: &mut W,
-        index: std::primitive::usize,
-    ) -> Result<()> {
+    fn write_to_binary<W: Write>(&self, writer: &mut W, index: usize) -> Result<()> {
         write_length_to_binary(writer, std::mem::size_of::<i16>())?;
         writer.write_i16::<NetworkEndian>(self.value(index))?;
         Ok(())
@@ -346,11 +334,7 @@ impl WriteToBinary for Int16Array {
 }
 
 impl WriteToBinary for Int32Array {
-    fn write_to_binary<W: Write>(
-        &self,
-        writer: &mut W,
-        index: std::primitive::usize,
-    ) -> Result<()> {
+    fn write_to_binary<W: Write>(&self, writer: &mut W, index: usize) -> Result<()> {
         write_length_to_binary(writer, std::mem::size_of::<i32>())?;
         writer.write_i32::<NetworkEndian>(self.value(index))?;
         Ok(())
@@ -358,11 +342,7 @@ impl WriteToBinary for Int32Array {
 }
 
 impl WriteToBinary for UInt32Array {
-    fn write_to_binary<W: Write>(
-        &self,
-        writer: &mut W,
-        index: std::primitive::usize,
-    ) -> Result<()> {
+    fn write_to_binary<W: Write>(&self, writer: &mut W, index: usize) -> Result<()> {
         write_length_to_binary(writer, std::mem::size_of::<u32>())?;
         writer.write_u32::<NetworkEndian>(self.value(index))?;
         Ok(())
@@ -370,11 +350,7 @@ impl WriteToBinary for UInt32Array {
 }
 
 impl WriteToBinary for UInt64Array {
-    fn write_to_binary<W: Write>(
-        &self,
-        writer: &mut W,
-        index: std::primitive::usize,
-    ) -> Result<()> {
+    fn write_to_binary<W: Write>(&self, writer: &mut W, index: usize) -> Result<()> {
         write_length_to_binary(writer, std::mem::size_of::<u32>())?;
         writer.write_u64::<NetworkEndian>(self.value(index))?;
         Ok(())
@@ -382,11 +358,7 @@ impl WriteToBinary for UInt64Array {
 }
 
 impl WriteToBinary for Int64Array {
-    fn write_to_binary<W: Write>(
-        &self,
-        writer: &mut W,
-        index: std::primitive::usize,
-    ) -> Result<()> {
+    fn write_to_binary<W: Write>(&self, writer: &mut W, index: usize) -> Result<()> {
         write_length_to_binary(writer, std::mem::size_of::<i64>())?;
         writer.write_i64::<NetworkEndian>(self.value(index))?;
         Ok(())
@@ -394,11 +366,7 @@ impl WriteToBinary for Int64Array {
 }
 
 impl WriteToBinary for Float32Array {
-    fn write_to_binary<W: Write>(
-        &self,
-        writer: &mut W,
-        index: std::primitive::usize,
-    ) -> Result<()> {
+    fn write_to_binary<W: Write>(&self, writer: &mut W, index: usize) -> Result<()> {
         write_length_to_binary(writer, std::mem::size_of::<f32>())?;
         writer.write_f32::<NetworkEndian>(self.value(index))?;
         Ok(())
@@ -406,11 +374,7 @@ impl WriteToBinary for Float32Array {
 }
 
 impl WriteToBinary for Float64Array {
-    fn write_to_binary<W: Write>(
-        &self,
-        writer: &mut W,
-        index: std::primitive::usize,
-    ) -> Result<()> {
+    fn write_to_binary<W: Write>(&self, writer: &mut W, index: usize) -> Result<()> {
         write_length_to_binary(writer, std::mem::size_of::<f64>())?;
         writer.write_f64::<NetworkEndian>(self.value(index))?;
         Ok(())
@@ -418,11 +382,7 @@ impl WriteToBinary for Float64Array {
 }
 
 impl WriteToBinary for TimestampMicrosecondArray {
-    fn write_to_binary<W: Write>(
-        &self,
-        writer: &mut W,
-        index: std::primitive::usize,
-    ) -> Result<()> {
+    fn write_to_binary<W: Write>(&self, writer: &mut W, index: usize) -> Result<()> {
         write_length_to_binary(writer, std::mem::size_of::<i64>())?;
         writer.write_i64::<NetworkEndian>(self.value(index) - EPOCH_MICROS)?;
         Ok(())
@@ -430,11 +390,7 @@ impl WriteToBinary for TimestampMicrosecondArray {
 }
 
 impl WriteToBinary for Date32Array {
-    fn write_to_binary<W: Write>(
-        &self,
-        writer: &mut W,
-        index: std::primitive::usize,
-    ) -> Result<()> {
+    fn write_to_binary<W: Write>(&self, writer: &mut W, index: usize) -> Result<()> {
         write_length_to_binary(writer, std::mem::size_of::<i32>())?;
         writer.write_i32::<NetworkEndian>(self.value(index) - EPOCH_DAYS)?;
         Ok(())
@@ -442,11 +398,7 @@ impl WriteToBinary for Date32Array {
 }
 
 impl WriteToBinary for Time64MicrosecondArray {
-    fn write_to_binary<W: Write>(
-        &self,
-        writer: &mut W,
-        index: std::primitive::usize,
-    ) -> Result<()> {
+    fn write_to_binary<W: Write>(&self, writer: &mut W, index: usize) -> Result<()> {
         write_length_to_binary(writer, std::mem::size_of::<i32>())?;
         writer.write_i32::<NetworkEndian>(self.value(index) as i32)?;
         Ok(())
@@ -454,11 +406,7 @@ impl WriteToBinary for Time64MicrosecondArray {
 }
 
 impl WriteToBinary for StringArray {
-    fn write_to_binary<W: Write>(
-        &self,
-        writer: &mut W,
-        index: std::primitive::usize,
-    ) -> Result<()> {
+    fn write_to_binary<W: Write>(&self, writer: &mut W, index: usize) -> Result<()> {
         let value = self.value(index).as_bytes();
         dbg!(&value);
         write_length_to_binary(writer, value.len())?;
@@ -468,11 +416,7 @@ impl WriteToBinary for StringArray {
 }
 
 impl WriteToBinary for BinaryArray {
-    fn write_to_binary<W: Write>(
-        &self,
-        writer: &mut W,
-        index: std::primitive::usize,
-    ) -> Result<()> {
+    fn write_to_binary<W: Write>(&self, writer: &mut W, index: usize) -> Result<()> {
         let value = self.value(index);
         write_length_to_binary(writer, value.len())?;
         writer.write(value)?;
