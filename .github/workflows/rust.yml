@@ -6,6 +6,9 @@ jobs:
   build:
 
     runs-on: ubuntu-latest
+    paths-ignore:
+    - README.md
+    - notes/**.md
 
     steps:
     - uses: actions/checkout@master

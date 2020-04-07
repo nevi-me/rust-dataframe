@@ -41,6 +41,10 @@ Spark is a convenience to reduce bikeshedding, but we will probably provide a mo
 
 ## Status
 
+A low-level API can already be used for simple tasks that do not require aggregations, joins or sorts. A simpler API is currently not a priority until we have more capabilities to transform data.
+
+One good potential immediate use of the library would be copying data from one supported data source to another (e.g. PostgreSQL to Arrow or CSV with minimal transformations). 
+
 ### Roadmap
 
 - [ ] Lazy evaluation (H1 2020)
@@ -48,32 +52,30 @@ Spark is a convenience to reduce bikeshedding, but we will probably provide a mo
   - [ ] Joins
   - [ ] Sorting
 - [ ] Adding compute `fn`s (H1 2020)
-- [ ] Python bindings (H2 2020)
+- [ ] Bindings to other languages (H2 2020)
 
 ### IO
 
-IO support isn't great yet, but this is not the best place to implement it. We are contributing to the effort in Apache Arrow's Rust implementation, and more contributors would be welcome there.
-
-For now, we're trying to support CSV, JSON, and perhaps other simpler file formats.
-**Note on Feather:** The Feather file format support can be considered as deprecated in favour of Arrow IPC. Though we have implemented Feather, it's meant to be a stop-gap measure until Arrow supports IPC (in Rust, anticipated at `1.0.0`).
+We are working on IO support, with priority for SQL read and write. 
+PostgreSQL IO is supported using the binary protocol, although not all data types are supported (lists, structs, numeric, and a few other non-primitive types)
 
 - IO Support
-  - [X] CSV (using Arrow)
+  - [X] CSV
     - [X] Read
     - [X] Write
   - [ ] JSON
-    - [X] Read (submitted to Arrow)
+    - [X] Read
     - [ ] Write
   - [X] Arrow IPC
     - [X] Read File
     - [X] Write FIle
-  - [ ] Parquet (relying on Arrow)
+  - [ ] Parquet
     - [ ] Read File
     - [ ] Write File
-  - [ ] SQL (planning on relying on other efforts, if someone wants to build a SQL<>Arrow converter)
-    - [ ] PostgreSQL
-      - [X] Read (ongoing, reading of most columns possible)
-      - [ ] Write
+  - [ ] SQL (part of an effort to create generic DB traits)
+    - [X] PostgreSQL (Primitive and temporal types supported, PRs welcome for other types)
+      - [X] Read
+      - [X] Write
     - [ ] MSSQL (using tiberius)
       - [ ] Read
       - [ ] Write
