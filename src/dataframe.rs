@@ -12,10 +12,11 @@ use arrow::record_batch::RecordBatch;
 
 use crate::error::DataFrameError;
 use crate::expression::{
-    BooleanFilter, BooleanFilterEval, BooleanInput, JoinCriteria, SortCriteria,
+    BooleanFilter, BooleanFilterEval, BooleanInput, JoinCriteria, SortCriteria, SqlDatabase,
+    SqlWriteOptions,
 };
 use crate::io::sql;
-use crate::io::sql::SqlDataSource;
+use crate::io::sql::{SqlDataSink, SqlDataSource};
 use crate::table::Column;
 use crate::utils;
 
@@ -429,7 +430,7 @@ impl DataFrame {
     /// Write dataframe to an Arrow IPC file
     ///
     /// TOOO: caller must supply extension as there is no common extension yet
-    pub fn to_arrow(&self, path: &str) -> Result<(), ArrowError> {
+    pub fn to_arrow(&self, path: &str) -> Result<(), DataFrameError> {
         let file = File::create(path)?;
         let mut writer = IpcFileWriter::try_new(file, self.schema())?;
         let record_batches = self.to_record_batches();
@@ -441,7 +442,7 @@ impl DataFrame {
         Ok(())
     }
 
-    pub fn to_csv(&self, path: &str) -> Result<(), arrow::error::ArrowError> {
+    pub fn to_csv(&self, path: &str) -> Result<(), DataFrameError> {
         // use csv::error::Error;
         use arrow::csv::Writer;
 
@@ -454,6 +455,40 @@ impl DataFrame {
 
         results?;
 
+        Ok(())
+    }
+
+    pub fn to_sql(
+        &self,
+        table_name: &str,
+        options: &crate::expression::SqlWriteOptions,
+    ) -> Result<(), DataFrameError> {
+        match options.db {
+            SqlDatabase::Postgres => {
+                if options.overwrite {
+                    sql::postgres::Postgres::create_table(
+                        options.connection_string.as_str(),
+                        table_name,
+                        self.schema(),
+                    )?;
+                }
+                sql::postgres::Postgres::write_to_table(
+                    options.connection_string.as_str(),
+                    table_name,
+                    &self.to_record_batches(),
+                )?;
+            }
+            SqlDatabase::MsSql => {
+                return Err(DataFrameError::SqlError(
+                    "MSSQL database not yet supported".to_string(),
+                ));
+            }
+            SqlDatabase::MySql => {
+                return Err(DataFrameError::SqlError(
+                    "MySQL database not yet supported".to_string(),
+                ))
+            }
+        }
         Ok(())
     }
 
@@ -499,7 +534,10 @@ impl DataFrame {
 mod tests {
     use crate::dataframe::DataFrame;
     use crate::functions::scalar::ScalarFunctions;
-    use crate::table::*;
+    use crate::{
+        expression::{SqlDatabase, SqlWriteOptions},
+        table::*,
+    };
     use arrow::array::*;
     use arrow::datatypes::{DataType, Field, Float64Type};
     use std::sync::Arc;
@@ -520,52 +558,33 @@ mod tests {
         assert_eq!(37, dataframe.num_rows());
     }
 
-    // #[test]
-    // fn read_postgres_table_to_dataframe() {
-    //     let dataframe = DataFrame::from_sql_table(
-    //         "postgres://postgres:password@localhost:5432/postgres",
-    //         "public.arrow_data_types",
-    //     );
-    //     assert_eq!(6, dataframe.num_columns());
-    //     assert_eq!(1, dataframe.num_rows());
+    #[test]
+    fn read_postgres_table_to_then_save() {
+        let connection_string = "postgres://postgres:password@localhost:5432/postgres";
+        let mut dataframe = DataFrame::from_sql_table(connection_string, "arrow_data_types");
+        assert!(dataframe.num_columns() > 3);
+        assert!(dataframe.num_rows() > 0);
 
-    //     let col_1 = dataframe.column(0);
-    //     let col_2 = dataframe.column(1);
-    //     let col_3 = dataframe.column(2);
-    //     let col_4 = dataframe.column(3);
-    //     let col_5 = dataframe.column(4);
-    //     let col_6 = dataframe.column(5);
-    //     assert_eq!(
-    //         "PrimitiveArray<Int32>\n[\n  1,\n]",
-    //         format!("{:?}", Int32Array::from(col_1.data().chunks()[0].data()))
-    //     );
-    //     assert_eq!(
-    //         "PrimitiveArray<Boolean>\n[\n  true,\n]",
-    //         format!("{:?}", BooleanArray::from(col_2.data().chunks()[0].data()))
-    //     );
-    //     assert_eq!(
-    //         "PrimitiveArray<Int64>\n[\n  null,\n]",
-    //         format!("{:?}", Int64Array::from(col_3.data().chunks()[0].data()))
-    //     );
-    //     assert_eq!(
-    //         "lorem ipsum",
-    //         StringArray::from(col_4.data().chunks()[0].data()).value(0)
-    //     );
-    //     assert_eq!(
-    //         "PrimitiveArray<Timestamp(Millisecond)>\n[\n  2019-04-19T10:41:13.591,\n]",
-    //         format!(
-    //             "{:?}",
-    //             TimestampMillisecondArray::from(col_5.data().chunks()[0].data())
-    //         )
-    //     );
-    //     assert_eq!(
-    //         "PrimitiveArray<Time64(Microsecond)>\n[\n  12:45:00,\n]",
-    //         format!(
-    //             "{:?}",
-    //             Time64MicrosecondArray::from(col_6.data().chunks()[0].data())
-    //         )
-    //     );
-    // }
+        // invert booleans
+        let strings = dataframe.column_by_name("strings");
+        let lower = ScalarFunctions::lower(col_to_string_arrays(strings)).unwrap();
+        let lower: Vec<ArrayRef> = lower.into_iter().map(|a| Arc::new(a) as ArrayRef).collect();
+        dataframe = dataframe.with_column(
+            "strings_lower",
+            Column::from_arrays(lower, Field::new("strings_lower", DataType::Utf8, true)),
+        );
+
+        dataframe
+            .to_sql(
+                "t2_strings_lower",
+                &SqlWriteOptions {
+                    connection_string: connection_string.to_string(),
+                    overwrite: true,
+                    db: SqlDatabase::Postgres,
+                },
+            )
+            .unwrap();
+    }
 
     #[test]
     fn dataframe_ops() {

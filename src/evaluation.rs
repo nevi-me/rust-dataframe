@@ -340,8 +340,8 @@ impl Evaluate for DataFrame {
         match &writer.sink {
             Csv(path, _options) => self.to_csv(&path),
             Arrow(path) => self.to_arrow(&path),
+            Sql(table_name, options) => self.to_sql(table_name, options),
         }
-        .map_err(|arrow_err| arrow_err.into())
     }
 }
 

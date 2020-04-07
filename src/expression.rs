@@ -357,6 +357,7 @@ pub enum DataSourceType {
 pub enum DataSinkType {
     Csv(String, CsvWriteOptions),
     Arrow(String),
+    Sql(String, SqlWriteOptions),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -387,6 +388,13 @@ pub struct SqlReadOptions {
     pub(crate) connection_string: String,
     pub(crate) db: SqlDatabase,
     pub(crate) limit: Option<usize>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct SqlWriteOptions {
+    pub(crate) connection_string: String,
+    pub(crate) db: SqlDatabase,
+    pub(crate) overwrite: bool,
 }
 
 /// A calculation on one or many columns, producing an output column
