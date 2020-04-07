@@ -1,14 +1,19 @@
 name: Rust
 
-on: [push, pull_request]
+on:
+  push:
+    paths-ignore:
+      - README.md
+      - notes/**.md
+  pull_request:
+    paths-ignore:
+      - README.md
+      - notes/**.md
 
 jobs:
   build:
 
     runs-on: ubuntu-latest
-    paths-ignore:
-    - README.md
-    - notes/**.md
 
     steps:
     - uses: actions/checkout@master
