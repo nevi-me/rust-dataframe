@@ -439,7 +439,6 @@ where
                 null_buffers[i].push(false);
             } else {
                 null_buffers[i].push(true);
-                dbg!((schema.field(i), col_length));
                 // big endian data, needs to be converted to little endian
                 let mut data = read_col(
                     &mut reader,

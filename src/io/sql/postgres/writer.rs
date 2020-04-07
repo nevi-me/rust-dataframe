@@ -2,7 +2,7 @@ use std::io::Write;
 use std::sync::Arc;
 
 use arrow::array::*;
-use arrow::datatypes::{DataType, Field, Schema, TimeUnit};
+use arrow::datatypes::{DataType, DateUnit, Field, Schema, TimeUnit};
 use arrow::{compute::cast, record_batch::RecordBatch};
 use byteorder::{LittleEndian, NetworkEndian, WriteBytesExt};
 use postgres::{Client, CopyInWriter, NoTls};
@@ -40,7 +40,7 @@ impl SqlDataSink for Postgres {
     fn write_to_table(
         connection: &std::primitive::str,
         table_name: &std::primitive::str,
-        batches: Vec<&RecordBatch>,
+        batches: &Vec<RecordBatch>,
     ) -> Result<()> {
         if batches.is_empty() {
             return Err(DataFrameError::IoError(
@@ -55,7 +55,8 @@ impl SqlDataSink for Postgres {
             // write out batch
             write_to_binary(&mut writer, batch)?;
         }
-        write_null_to_binary(&mut writer)?;
+        writer.write_i16::<NetworkEndian>(-1)?;
+        println!("Done writing values, finishing");
 
         writer.finish()?;
         Ok(())
@@ -207,9 +208,12 @@ fn write_to_binary(writer: &mut CopyInWriter, batch: &RecordBatch) -> Result<u64
                     let arr = arr.as_any().downcast_ref::<Float64Array>().unwrap();
                     arr.write_to_binary(writer, row)?;
                 }
-                arrow::datatypes::DataType::Date32(_)
-                | arrow::datatypes::DataType::Date64(_)
-                | arrow::datatypes::DataType::Timestamp(_, _) => {
+                arrow::datatypes::DataType::Date32(_) | arrow::datatypes::DataType::Date64(_) => {
+                    let arr = cast(arr, &DataType::Date32(DateUnit::Day))?;
+                    let arr = arr.as_any().downcast_ref::<Date32Array>().unwrap();
+                    arr.write_to_binary(writer, row)?;
+                }
+                arrow::datatypes::DataType::Timestamp(_, _) => {
                     let arr = cast(arr, &DataType::Timestamp(TimeUnit::Microsecond, None))?;
                     let arr = arr
                         .as_any()
@@ -230,14 +234,24 @@ fn write_to_binary(writer: &mut CopyInWriter, batch: &RecordBatch) -> Result<u64
                         "Duration type not yet supported by PostgreSQL writer".to_string(),
                     ));
                 }
-                arrow::datatypes::DataType::Interval(_) => {}
-                arrow::datatypes::DataType::Binary => {}
+                arrow::datatypes::DataType::Interval(_) => {
+                    return Err(DataFrameError::SqlError(
+                        "Writing Intervals not yet implemented".to_string(),
+                    ));
+                }
+                arrow::datatypes::DataType::Binary => {
+                    let arr = arr.as_any().downcast_ref::<BinaryArray>().unwrap();
+                    arr.write_to_binary(writer, row)?;
+                }
                 arrow::datatypes::DataType::FixedSizeBinary(_) => {
                     return Err(DataFrameError::SqlError(
                         "Duration type not yet supported by PostgreSQL writer".to_string(),
                     ));
                 }
-                arrow::datatypes::DataType::Utf8 => {}
+                arrow::datatypes::DataType::Utf8 => {
+                    let arr = arr.as_any().downcast_ref::<StringArray>().unwrap();
+                    arr.write_to_binary(writer, row)?;
+                }
                 arrow::datatypes::DataType::List(_) => {
                     return Err(DataFrameError::SqlError(
                         "Duration type not yet supported by PostgreSQL writer".to_string(),
@@ -446,6 +460,7 @@ impl WriteToBinary for StringArray {
         index: std::primitive::usize,
     ) -> Result<()> {
         let value = self.value(index).as_bytes();
+        dbg!(&value);
         write_length_to_binary(writer, value.len())?;
         writer.write(value)?;
         Ok(())
@@ -494,9 +509,23 @@ mod tests {
             Field::new("c17", DataType::Utf8, true),
             Field::new("c18", DataType::Utf8, false),
         ]);
-        let result = Postgres::create_table(connection, "t1", &Arc::new(schema.clone()))?;
+        Postgres::create_table(connection, "t1", &Arc::new(schema.clone()))?;
         let read_schema = Postgres::get_table_schema(connection, "t1")?;
         assert_eq!(schema, read_schema);
+        Ok(())
+    }
+
+    #[test]
+    fn test_write_table() -> Result<()> {
+        let connection = "postgres://postgres:password@localhost:5432/postgres";
+        // read an existing table
+        let batches =
+            Postgres::read_query(connection, "select * from arrow_data_types", None, 1024)?;
+        assert!(batches.len() > 0);
+        // create a table
+        let schema = batches[0].schema();
+        Postgres::create_table(connection, "t2", &schema)?;
+        Postgres::write_to_table(connection, "t2", &batches)?;
         Ok(())
     }
 }
