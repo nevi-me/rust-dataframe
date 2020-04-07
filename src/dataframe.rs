@@ -1,5 +1,6 @@
 use std::fs::File;
 use std::io::BufReader;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use arrow::array::{Array, ArrayDataBuilder, ArrayDataRef, ArrayRef, UInt64Array};
@@ -8,7 +9,9 @@ use arrow::datatypes::*;
 use arrow::error::ArrowError;
 use arrow::ipc::{reader::FileReader as IpcFileReader, writer::FileWriter as IpcFileWriter};
 use arrow::json::{Reader as JsonReader, ReaderBuilder as JsonReaderBuilder};
-use arrow::record_batch::RecordBatch;
+use arrow::record_batch::{RecordBatch, RecordBatchReader};
+use parquet::arrow::{ArrowReader, ParquetFileArrowReader};
+use parquet::file::reader::SerializedFileReader;
 
 use crate::error::DataFrameError;
 use crate::expression::{
@@ -404,6 +407,27 @@ impl DataFrame {
             schema,
             columns: table.columns,
         }
+    }
+
+    pub fn from_parquet(path: &str) -> Result<Self, DataFrameError> {
+        let file = File::open(path)?;
+        let file_reader = SerializedFileReader::new(file)?;
+        let mut arrow_reader = ParquetFileArrowReader::new(Rc::new(file_reader));
+
+        let schema = Arc::new(arrow_reader.get_schema()?);
+        let mut record_batch_reader = arrow_reader.get_record_reader(1024)?;
+
+        let mut batches = vec![];
+        while let Ok(Some(batch)) = record_batch_reader.next_batch() {
+            batches.push(batch);
+        }
+
+        let table = crate::table::Table::from_record_batches(schema.clone(), batches);
+
+        Ok(Self {
+            schema,
+            columns: table.columns,
+        })
     }
 
     /// Create a DataFrame from a SQL table

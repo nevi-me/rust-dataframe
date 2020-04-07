@@ -44,4 +44,10 @@ impl From<postgres::error::Error> for DataFrameError {
     }
 }
 
+impl From<parquet::errors::ParquetError> for DataFrameError {
+    fn from(error: parquet::errors::ParquetError) -> Self {
+        DataFrameError::IoError(error.to_string())
+    }
+}
+
 pub type Result<T> = ::std::result::Result<T, DataFrameError>;

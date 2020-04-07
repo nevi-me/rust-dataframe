@@ -1,8 +1,12 @@
 //! Data source evaluators and readers
 
+use std::fs::File;
+use std::rc::Rc;
+
 use arrow::csv::{Reader as CsvReader, ReaderBuilder as CsvBuilder};
 use arrow::ipc::reader::FileReader as ArrowFileReader;
-use std::fs::File;
+use parquet::arrow::{ArrowReader, ParquetFileArrowReader};
+use parquet::file::reader::SerializedFileReader;
 
 use crate::error::{DataFrameError, Result};
 use crate::expression::{DataSourceType, Dataset, Reader, SqlDatabase};
@@ -37,8 +41,18 @@ impl DataSourceEval for Reader {
                     columns: schema.fields().iter().map(|f| f.clone().into()).collect(),
                 })
             }
-            Json(path) => panic!(),
-            Parquet(path) => panic!(),
+            Json(path) => unimplemented!("JSON data source evaluation not yet implemented"),
+            Parquet(path) => {
+                let file = File::open(path)?;
+                let file_reader = SerializedFileReader::new(file)?;
+                let mut arrow_reader = ParquetFileArrowReader::new(Rc::new(file_reader));
+                let schema = arrow_reader.get_schema()?;
+
+                Ok(Dataset {
+                    name: "parquet_file_source".to_owned(),
+                    columns: schema.fields().iter().map(|f| f.clone().into()).collect(),
+                })
+            }
             Arrow(path) => {
                 let file = File::open(&path)?;
                 let reader = ArrowFileReader::try_new(file)?;
