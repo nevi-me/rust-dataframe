@@ -4,13 +4,13 @@ use std::{io::Read, sync::Arc};
 use arrow::array::*;
 use arrow::buffer::Buffer;
 use arrow::datatypes::{DataType, DateUnit, Field, IntervalUnit, Schema, TimeUnit, ToByteSlice};
-use arrow::record_batch::RecordBatch;
+use arrow::record_batch::{RecordBatch, RecordBatchReader};
 use byteorder::{LittleEndian, NetworkEndian, ReadBytesExt};
 use chrono::Timelike;
 use postgres::types::*;
 use postgres::{Client, NoTls, Row};
 
-use super::{Postgres, EPOCH_DAYS, EPOCH_MICROS, MAGIC};
+use super::{Postgres, PostgresReadIterator, EPOCH_DAYS, EPOCH_MICROS, MAGIC};
 use crate::error::DataFrameError;
 use crate::io::sql::SqlDataSource;
 
@@ -109,6 +109,88 @@ impl SqlDataSource for Postgres {
             format!("select a.* from ({}) a limit {}", query, limit).as_str(),
         )?;
         read_from_binary(reader, &schema).map(|batch| vec![batch])
+    }
+}
+
+impl PostgresReadIterator {
+    /// Create a new Postgres reader
+    pub fn try_new(
+        connection: &str,
+        query: &str,
+        limit: Option<usize>,
+        batch_size: usize,
+    ) -> crate::error::Result<Self> {
+        let mut client = Client::connect(connection, NoTls).unwrap();
+        // get schema
+        let row = client
+            .query_one(
+                format!("select a.* from ({}) a limit 1", query).as_str(),
+                &[],
+            )
+            .unwrap();
+        let schema = row_to_schema(&row).expect("Unable to get schema from row");
+        Ok(Self {
+            client,
+            query: query.to_string(),
+            limit: limit.unwrap_or_else(|| std::usize::MAX),
+            batch_size,
+            schema,
+            read_records: 0,
+            is_complete: false,
+        })
+    }
+
+    /// Read the next batch
+    fn read_batch(&mut self) -> crate::error::Result<Option<RecordBatch>> {
+        if self.is_complete {
+            return Ok(None);
+        }
+        let reader = get_binary_reader(
+            &mut self.client,
+            format!(
+                "select a.* from ({}) a limit {} offset {}",
+                self.query, self.batch_size, self.read_records
+            )
+            .as_str(),
+        )?;
+        let batch = read_from_binary(reader, &self.schema)?;
+        println!(
+            "Read {} records from offset {}",
+            batch.num_rows(),
+            self.read_records
+        );
+        self.read_records += batch.num_rows();
+        if batch.num_rows() == 0 {
+            self.is_complete = true;
+            return Ok(None);
+        } else if self.read_records >= self.limit {
+            self.is_complete = true;
+            return Ok(Some(batch));
+        }
+        Ok(Some(batch))
+    }
+
+    /// Get a reference to the table's schema
+    pub fn schema(&self) -> &Schema {
+        &self.schema
+    }
+}
+
+impl RecordBatchReader for PostgresReadIterator {
+    fn schema(&mut self) -> arrow::datatypes::SchemaRef {
+        Arc::new(self.schema.clone())
+    }
+    fn next_batch(&mut self) -> arrow::error::Result<Option<RecordBatch>> {
+        self.read_batch().map_err(|_| {
+            arrow::error::ArrowError::IoError("Unable to read record batch".to_string())
+        })
+    }
+}
+
+impl Iterator for PostgresReadIterator {
+    type Item = crate::error::Result<RecordBatch>;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.read_batch().transpose()
     }
 }
 
