@@ -69,7 +69,7 @@ impl LazyFrame {
         let ops = Calculation::calculate(
             &self.output,
             input_col_names,
-            Function::Scalar(ScalarFunction::Sine),
+            function,
             Some(col_name.to_owned()),
             as_type,
         )?;
@@ -323,6 +323,7 @@ impl LazyFrame {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use arrow::array::*;
 
     #[test]
     fn test_lazy_pipeline() {
@@ -364,6 +365,50 @@ mod tests {
         let dataframe = frame.evaluate();
         assert_eq!(dataframe.num_columns(), 5);
         assert_eq!(dataframe.num_rows(), 37);
+    }
+
+    #[test]
+    fn test_with_columns() {
+        let reader = Reader {
+            source: DataSourceType::Csv(
+                "./test/data/uk_cities_with_headers.csv".to_owned(),
+                CsvReadOptions {
+                    has_headers: true,
+                    batch_size: 1024,
+                    delimiter: None,
+                    max_records: Some(1024),
+                    projection: None,
+                },
+            ),
+        };
+        let compute = Computation::compute_read(&reader);
+        // read data
+        let mut frame = LazyFrame::read(compute);
+        // add a column as a calculation of 2 columns
+        frame = frame
+            .with_column(
+                "sum",
+                Function::Scalar(ScalarFunction::Add),
+                vec!["lat", "lng"],
+                None,
+            )
+            .unwrap();
+        // materialise the frame
+        let dataframe = frame.evaluate();
+        assert_eq!(
+            Float64Array::from(
+                dataframe
+                    .column_by_name("sum")
+                    .data()
+                    .chunks()
+                    .iter()
+                    .next()
+                    .unwrap()
+                    .data()
+            )
+            .value_slice(0, 1)[0],
+            57.653484 - 3.335724,
+        );
     }
 
     #[test]
