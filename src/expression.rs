@@ -717,6 +717,23 @@ pub enum Scalar {
     String(String),
 }
 
+macro_rules! scalar_from_trait {
+    ( $f:ident, $variant:ident ) => {
+        impl From<$f> for Scalar {
+            fn from(f: $f) -> Self {
+                Self::$variant(f)
+            }
+        }
+    };
+}
+
+scalar_from_trait!(f32, Float32);
+scalar_from_trait!(i32, Int32);
+scalar_from_trait!(f64, Float64);
+scalar_from_trait!(i64, Int64);
+scalar_from_trait!(bool, Boolean);
+scalar_from_trait!(String, String);
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum BooleanInput {
     Scalar(Scalar),
@@ -834,6 +851,14 @@ impl BooleanFilter {
                 )?) as ArrayRef)
             }
         }
+    }
+
+    pub fn scalar<T: Into<Scalar>>(i: T) -> Box<Self> {
+        Box::new(BooleanFilter::Input(BooleanInput::Scalar(i.into())))
+    }
+
+    pub fn column(c: Column) -> Box<Self> {
+        Box::new(BooleanFilter::Input(BooleanInput::Column(c)))
     }
 }
 

@@ -386,10 +386,8 @@ mod tests {
         let mut frame = LazyFrame::read(computation);
         frame = frame.select(vec!["city", "lat", "lng"]).unwrap();
         let filter = BooleanFilter::Gt(
-            Box::new(BooleanFilter::Input(BooleanInput::Column(
-                frame.column("lat").unwrap().1.clone(),
-            ))),
-            Box::new(BooleanFilter::Input(BooleanInput::Scalar(Scalar::Int64(0)))),
+            BooleanFilter::column(frame.column("lat").unwrap().1.clone()),
+            BooleanFilter::scalar(0i64),
         );
         frame = frame.filter(filter);
         let computations = frame.expression.unroll();
