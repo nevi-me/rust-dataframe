@@ -1,5 +1,6 @@
-use std::fs::File;
+use std::fs::{metadata, read_dir, File};
 use std::io::BufReader;
+use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -11,7 +12,7 @@ use arrow::ipc::{reader::FileReader as IpcFileReader, writer::FileWriter as IpcF
 use arrow::json::{Reader as JsonReader, ReaderBuilder as JsonReaderBuilder};
 use arrow::record_batch::{RecordBatch, RecordBatchReader};
 use parquet::arrow::{ArrowReader, ParquetFileArrowReader};
-use parquet::file::reader::SerializedFileReader;
+use parquet::file::reader::{FileReader, SerializedFileReader};
 
 use crate::error::DataFrameError;
 use crate::expression::{
@@ -410,22 +411,44 @@ impl DataFrame {
     }
 
     pub fn from_parquet(path: &str) -> Result<Self, DataFrameError> {
-        let file = File::open(path)?;
-        let file_reader = SerializedFileReader::new(file)?;
-        let mut arrow_reader = ParquetFileArrowReader::new(Rc::new(file_reader));
-
-        let schema = Arc::new(arrow_reader.get_schema()?);
-        let mut record_batch_reader = arrow_reader.get_record_reader(1024)?;
-
-        let mut batches = vec![];
-        while let Ok(Some(batch)) = record_batch_reader.next_batch() {
-            batches.push(batch);
+        let attr = metadata(path)?;
+        let paths;
+        if attr.is_dir() {
+            let readdir = read_dir(path)?;
+            paths = readdir
+                .into_iter()
+                .filter_map(Result::ok)
+                .map(|entry| entry.path())
+                .collect();
+        } else {
+            paths = vec![PathBuf::from(path)];
         }
 
-        let table = crate::table::Table::from_record_batches(schema.clone(), batches);
+        let mut schema = None;
+        let mut batches = vec![];
+        for path in paths.iter() {
+            let file = File::open(path)?;
+            let file_reader = SerializedFileReader::new(file)?;
+            if file_reader.metadata().num_row_groups() == 0 {
+                // skip empty parquet files
+                continue;
+            }
+
+            let mut arrow_reader = ParquetFileArrowReader::new(Rc::new(file_reader));
+            if schema.is_none() {
+                schema = Some(Arc::new(arrow_reader.get_schema()?));
+            }
+
+            let mut record_batch_reader = arrow_reader.get_record_reader(1024)?;
+            while let Ok(Some(batch)) = record_batch_reader.next_batch() {
+                batches.push(batch);
+            }
+        }
+
+        let table = crate::table::Table::from_record_batches(schema.unwrap(), batches);
 
         Ok(Self {
-            schema,
+            schema: table.schema().clone(),
             columns: table.columns,
         })
     }
