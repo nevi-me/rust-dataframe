@@ -7,6 +7,7 @@ use crate::expression::*;
 
 use arrow::datatypes::{DataType, Schema};
 use arrow::error::ArrowError;
+use arrow::util::pretty;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
@@ -42,11 +43,9 @@ impl LazyFrame {
     pub fn display(&self, limit: usize) -> Result<(), DataFrameError> {
         // display is like write, except it just shows results as a table
         let limited = self.limit(limit);
-        let _dataframe = limited.evaluate();
-        // TODO: display dataframe
-        Err(DataFrameError::ComputeError(
-            "Display not yet implemented".to_string(),
-        ))
+        let dataframe = limited.evaluate();
+        pretty::print_batches(&dataframe.to_record_batches())?;
+        Ok(())
     }
 
     pub fn schema(&self) -> Arc<Schema> {

@@ -118,7 +118,7 @@ impl DataFrame {
 
     /// Returns dataframe as an Arrow `RecordBatch`
     /// TODO: add a method to break into smaller batches
-    fn to_record_batches(&self) -> Vec<RecordBatch> {
+    pub fn to_record_batches(&self) -> Vec<RecordBatch> {
         let num_chunks = self.column(0).data().num_chunks();
         let num_columns = self.num_columns();
         let mut batches: Vec<RecordBatch> = Vec::with_capacity(num_chunks);
