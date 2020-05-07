@@ -11,16 +11,16 @@ use arrow::error::ArrowError;
 use arrow::ipc::{reader::FileReader as IpcFileReader, writer::FileWriter as IpcFileWriter};
 use arrow::json::{Reader as JsonReader, ReaderBuilder as JsonReaderBuilder};
 use arrow::record_batch::{RecordBatch, RecordBatchReader};
+use arrow::util::pretty;
 use parquet::arrow::{ArrowReader, ParquetFileArrowReader};
 use parquet::file::reader::{FileReader, SerializedFileReader};
 
-use crate::error::DataFrameError;
+use crate::error::{DataFrameError, Result};
 use crate::expression::{
     BooleanFilter, BooleanFilterEval, BooleanInput, JoinCriteria, SortCriteria, SqlDatabase,
     SqlWriteOptions,
 };
-use crate::io::sql;
-use crate::io::sql::{SqlDataSink, SqlDataSource};
+use crate::io::sql::{self, SqlDataSink, SqlDataSource};
 use crate::table::Column;
 use crate::utils;
 
@@ -191,6 +191,13 @@ impl DataFrame {
         unimplemented!("Sorting not yet implemented")
     }
 
+    /// Prints the data frame to console
+    ///
+    /// It is the caller's responsibility to limit the dataframe if wishing to print a subset
+    pub fn display(&self) -> Result<()> {
+        Ok(pretty::print_batches(&self.to_record_batches())?)
+    }
+
     /// Return the dataframe with an id that monotonically increases
     ///
     /// The id is a 64-bit array
@@ -351,7 +358,7 @@ impl DataFrame {
         }
     }
 
-    pub fn from_arrow(path: &str) -> Result<Self, ArrowError> {
+    pub fn from_arrow(path: &str) -> Result<Self> {
         let mut reader = IpcFileReader::try_new(File::open(path)?)?;
 
         let schema = reader.schema();
@@ -410,14 +417,14 @@ impl DataFrame {
         }
     }
 
-    pub fn from_parquet(path: &str) -> Result<Self, DataFrameError> {
+    pub fn from_parquet(path: &str) -> Result<Self> {
         let attr = metadata(path)?;
         let paths;
         if attr.is_dir() {
             let readdir = read_dir(path)?;
             paths = readdir
                 .into_iter()
-                .filter_map(Result::ok)
+                .filter_map(|r| r.ok())
                 .map(|entry| entry.path())
                 .collect();
         } else {
@@ -477,7 +484,7 @@ impl DataFrame {
     /// Write dataframe to an Arrow IPC file
     ///
     /// TOOO: caller must supply extension as there is no common extension yet
-    pub fn to_arrow(&self, path: &str) -> Result<(), DataFrameError> {
+    pub fn to_arrow(&self, path: &str) -> Result<()> {
         let file = File::create(path)?;
         let mut writer = IpcFileWriter::try_new(file, self.schema())?;
         let record_batches = self.to_record_batches();
@@ -489,7 +496,7 @@ impl DataFrame {
         Ok(())
     }
 
-    pub fn to_csv(&self, path: &str) -> Result<(), DataFrameError> {
+    pub fn to_csv(&self, path: &str) -> Result<()> {
         // use csv::error::Error;
         use arrow::csv::Writer;
 
@@ -498,7 +505,10 @@ impl DataFrame {
         let mut wrt = Writer::new(file);
 
         let batches = self.to_record_batches();
-        let results: Result<Vec<_>, ArrowError> = batches.iter().map(|b| wrt.write(b)).collect();
+        let results: Result<Vec<_>> = batches
+            .iter()
+            .map(|b| wrt.write(b).map_err(|e| e.into()))
+            .collect();
 
         results?;
 
@@ -509,7 +519,7 @@ impl DataFrame {
         &self,
         table_name: &str,
         options: &crate::expression::SqlWriteOptions,
-    ) -> Result<(), DataFrameError> {
+    ) -> Result<()> {
         match options.db {
             SqlDatabase::Postgres => {
                 if options.overwrite {
@@ -555,12 +565,9 @@ impl DataFrame {
     }
 
     /// Evaluate a `BooleanFilter` against dataframe, returning a column with chunked `BooleanArray` masks
-    fn evaluate_boolean_filter(
-        &self,
-        filter: &BooleanFilter,
-    ) -> Result<crate::table::Column, ArrowError> {
+    fn evaluate_boolean_filter(&self, filter: &BooleanFilter) -> Result<crate::table::Column> {
         // create a new column with filter
-        let bools: Result<Vec<ArrayRef>, ArrowError> = self
+        let bools: Result<Vec<ArrayRef>> = self
             .to_record_batches()
             .iter()
             .map(|batch| filter.eval_to_array(batch))

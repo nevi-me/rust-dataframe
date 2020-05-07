@@ -758,7 +758,7 @@ impl BooleanFilter {
     pub fn eval_to_array(
         &self,
         batch: &arrow::record_batch::RecordBatch,
-    ) -> Result<arrow::array::ArrayRef, ArrowError> {
+    ) -> Result<arrow::array::ArrayRef, DataFrameError> {
         use arrow::array::*;
         use std::sync::Arc;
         use BooleanFilter::*;
@@ -801,7 +801,7 @@ impl BooleanFilter {
                             return Ok(col.clone());
                         }
                         None => {
-                            return Err(ArrowError::InvalidArgumentError(format!(
+                            return Err(DataFrameError::ComputeError(format!(
                                 "Cannot find column {}",
                                 &column.name
                             )));

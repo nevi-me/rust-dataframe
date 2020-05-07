@@ -7,7 +7,6 @@ use crate::expression::*;
 
 use arrow::datatypes::{DataType, Schema};
 use arrow::error::ArrowError;
-use arrow::util::pretty;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
@@ -44,8 +43,7 @@ impl LazyFrame {
         // display is like write, except it just shows results as a table
         let limited = self.limit(limit);
         let dataframe = limited.evaluate();
-        pretty::print_batches(&dataframe.to_record_batches())?;
-        Ok(())
+        dataframe.display()
     }
 
     pub fn schema(&self) -> Arc<Schema> {
