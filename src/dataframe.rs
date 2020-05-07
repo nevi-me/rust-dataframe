@@ -609,7 +609,159 @@ impl DataFrame {
     }
 
     pub fn join(&self, other: &Self, criteria: &JoinCriteria) -> Self {
-        panic!("DataFrame joins are not yet implemented")
+        // get join indices
+        let (left_indices, right_indices) =
+            crate::functions::join::calc_equijoin_indices(self, other, criteria);
+        // partition dataframes into chunk boundaries, and collect them
+        let mut offset = 0;
+        let left_boundaries = self
+            .column(0)
+            .data()
+            .chunks()
+            .iter()
+            .zip(0..self.num_chunks())
+            .map(|(a, i)| {
+                let start = offset as u32;
+                offset += a.len();
+                (start, offset as u32, i)
+            })
+            .collect::<Vec<(u32, u32, usize)>>();
+
+        let mut offset = 0;
+        let right_boundaries = other
+            .column(0)
+            .data()
+            .chunks()
+            .iter()
+            .zip(0..other.num_chunks())
+            .map(|(a, i)| {
+                let start = offset as u32;
+                offset += a.len();
+                (start, offset as u32, i)
+            })
+            .collect::<Vec<(u32, u32, usize)>>();
+
+        let left_last = left_boundaries.len() - 1;
+        let right_last = right_boundaries.len() - 1;
+
+        // calculate cut-off points to ensure that left and right have the same lengths of columns
+        let left_bound = left_boundaries.clone();
+        let right_bound = right_boundaries.clone();
+        let mut min_left;
+        let mut min_right;
+        let mut max_left;
+        let mut max_right;
+        let mut seen_left = 0;
+        let mut seen_right = 0;
+        let mut merged_boundaries = vec![];
+        dbg!((&seen_left, &seen_right, &left_last, &right_last));
+        while seen_left <= left_last && seen_right <= right_last {
+            let l: &(u32, u32, usize) = left_bound.get(seen_left).unwrap();
+            let r: &(u32, u32, usize) = right_bound.get(seen_right).unwrap();
+            dbg!((&l, &r));
+            min_left = l.0;
+            max_left = l.1;
+            min_right = r.0;
+            max_right = r.1;
+            let v = (
+                if min_left == min_right || min_left < min_right {
+                    min_left
+                } else {
+                    min_right
+                },
+                if max_left == max_right || max_left < max_right {
+                    max_left
+                } else {
+                    max_right
+                },
+                l.2,
+                r.2,
+            );
+            if v.1 >= max_left {
+                seen_left += 1;
+            }
+            if v.1 >= max_right {
+                seen_right += 1;
+            }
+            merged_boundaries.push(v);
+        }
+
+        let mut left_buckets = vec![vec![]; left_boundaries.len()];
+        let mut right_buckets = vec![vec![]; right_boundaries.len()];
+
+        // fill the buckets
+        let left_slice = left_indices.as_slice();
+        let right_slice = right_indices.as_slice();
+        let mut left_unbalanced = 0;
+        let mut right_unbalanced = 0;
+
+        dbg!(&merged_boundaries);
+
+        left_indices.into_iter().for_each(|v| {
+            // determine which bucket to slot in
+            match v {
+                Some(v) => {
+                    let b = merged_boundaries
+                        .iter()
+                        .find(|(start, end, index, _)| &v >= start && &v < end)
+                        .expect("Invalid join bucket");
+                    left_buckets[b.2].push(Some(v));
+                }
+                None => {
+                    left_unbalanced += 1;
+                }
+            };
+        });
+        right_indices.into_iter().for_each(|v| {
+            // determine which bucket to slot in
+            match v {
+                Some(v) => {
+                    let b = right_boundaries
+                        .iter()
+                        .find(|(start, end, index)| &v >= start && &v < end)
+                        .expect("Invalid join bucket");
+                    right_buckets[b.2].push(Some(v));
+                }
+                None => {
+                    right_unbalanced += 1;
+                }
+            };
+        });
+
+        // we now have to slice through the right batch at the right length, to create equal chunk columns
+        // dbg!(&left_indices);
+        // dbg!(&right_indices);
+
+        // reconstruct the record batches from both sides
+        let left_batches = left_buckets
+            .into_iter()
+            .zip(self.to_record_batches().iter())
+            .map(|(ix, batch): (_, &RecordBatch)| {
+                let ix_array = UInt32Array::from(ix);
+                let columns = batch
+                    .columns()
+                    .iter()
+                    .map(|array| arrow::compute::take(array, &ix_array, None).unwrap())
+                    .collect::<Vec<ArrayRef>>();
+                RecordBatch::try_new(batch.schema().clone(), columns).unwrap()
+            })
+            .collect::<Vec<RecordBatch>>();
+
+        let right_batches = right_buckets
+            .into_iter()
+            .zip(other.to_record_batches().iter())
+            .map(|(ix, batch): (_, &RecordBatch)| {
+                let ix_array = UInt32Array::from(ix);
+                let columns = batch
+                    .columns()
+                    .iter()
+                    .map(|array| arrow::compute::take(array, &ix_array, None).unwrap())
+                    .collect::<Vec<ArrayRef>>();
+                RecordBatch::try_new(batch.schema().clone(), columns).unwrap()
+            })
+            .collect::<Vec<RecordBatch>>();
+
+        panic!()
     }
 }
 
@@ -624,7 +776,7 @@ mod tests {
 
     use crate::functions::scalar::ScalarFunctions;
     use crate::{
-        expression::{SqlDatabase, SqlWriteOptions},
+        expression::{JoinCriteria, JoinType, SqlDatabase, SqlWriteOptions},
         table::*,
     };
 
@@ -857,5 +1009,21 @@ mod tests {
         assert_eq!(b_array.value(3), 5);
         assert_eq!(b_array.value(4), 9);
         assert_eq!(b_array.value(5), 6);
+    }
+
+    #[test]
+    fn test_join() {
+        let connection_string = "postgres://postgres:password@localhost:5432/postgres";
+        let a = DataFrame::from_sql_table(connection_string, "j1");
+        dbg!(a.schema());
+        let b = DataFrame::from_sql_table(connection_string, "j2");
+        dbg!(b.schema());
+        let joined = a.join(
+            &b,
+            &JoinCriteria {
+                join_type: JoinType::LeftJoin,
+                criteria: vec![("a".to_string(), "d".to_string())],
+            },
+        );
     }
 }
