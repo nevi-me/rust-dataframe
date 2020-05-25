@@ -650,6 +650,7 @@ where
                 DataType::Struct(_) => panic!("Reading struct arrays not implemented"),
                 DataType::Dictionary(_, _) => panic!("Reading dictionary arrays not implemented"),
                 DataType::Union(_) => panic!("Union not supported"),
+                DataType::Null => panic!("Null not supported"),
             }
         });
     Ok(RecordBatch::try_new(Arc::new(schema.clone()), arrays)?)
@@ -684,6 +685,7 @@ fn read_col<R: Read>(reader: &mut R, data_type: &DataType, length: usize) -> Res
         DataType::Struct(_) => Err(()),
         DataType::Dictionary(_, _) => Err(()),
         DataType::Union(_) => Err(()),
+        DataType::Null => Err(()),
     }
 }
 

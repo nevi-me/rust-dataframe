@@ -319,11 +319,11 @@ impl DataFrame {
     pub fn from_csv(path: &str, schema: Option<Arc<Schema>>) -> Self {
         let file = File::open(path).unwrap();
         let mut reader = match schema {
-            Some(schema) => CsvReader::new(file, schema, true, 1024, None),
+            Some(schema) => CsvReader::new(file, schema, true, None, 1024, None),
             None => {
                 let builder = CsvReaderBuilder::new()
                     .infer_schema(None)
-                    .has_headers(true)
+                    .has_header(true)
                     .with_batch_size(1024);
                 builder.build(file).unwrap()
             }
