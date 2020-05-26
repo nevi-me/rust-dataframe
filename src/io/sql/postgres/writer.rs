@@ -133,7 +133,12 @@ fn get_postgres_type(field: &Field) -> Result<String> {
                 "Dictionary write not support not yet implemented".to_string(),
             ))
         }
-        arrow::datatypes::DataType::Union(_) => {
+        DataType::Null => {
+            return Err(DataFrameError::SqlError(
+                "Null write not support not yet implemented".to_string(),
+            ))
+        }
+        DataType::Union(_) => {
             return Err(DataFrameError::SqlError(
                 "Union type not yet supported".to_string(),
             ));
@@ -280,6 +285,11 @@ fn write_to_binary(writer: &mut CopyInWriter, batch: &RecordBatch) -> Result<u64
                 arrow::datatypes::DataType::Union(_) => {
                     return Err(DataFrameError::SqlError(
                         "Union type not yet supported by PostgreSQL writer".to_string(),
+                    ));
+                }
+                arrow::datatypes::DataType::Null => {
+                    return Err(DataFrameError::SqlError(
+                        "Null type not yet supported by PostgreSQL writer".to_string(),
                     ));
                 }
             }
