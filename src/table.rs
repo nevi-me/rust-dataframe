@@ -262,21 +262,26 @@ impl Column {
                     "Not yet implemented".to_string(),
                 ))
             }
-            DataType::LargeBinary => {
+            t => {
                 return Err(DataFrameError::ComputeError(
-                    "Not yet implemented".to_string(),
+                    format!("Merging arrays not yet implemented for {:?}", t),
                 ))
             }
-            DataType::LargeUtf8 => {
-                return Err(DataFrameError::ComputeError(
-                    "Not yet implemented".to_string(),
-                ))
-            }
-            DataType::LargeList(_) => {
-                return Err(DataFrameError::ComputeError(
-                    "Not yet implemented".to_string(),
-                ))
-            }
+            // DataType::LargeBinary => {
+            //     return Err(DataFrameError::ComputeError(
+            //         "Not yet implemented".to_string(),
+            //     ))
+            // }
+            // DataType::LargeUtf8 => {
+            //     return Err(DataFrameError::ComputeError(
+            //         "Not yet implemented".to_string(),
+            //     ))
+            // }
+            // DataType::LargeList(_) => {
+            //     return Err(DataFrameError::ComputeError(
+            //         "Not yet implemented".to_string(),
+            //     ))
+            // }
         }
     }
 
