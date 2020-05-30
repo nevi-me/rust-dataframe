@@ -4,7 +4,8 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use arrow::array::{Array, ArrayDataBuilder, ArrayDataRef, ArrayRef, UInt64Array};
+use arrow::array::{Array, ArrayDataBuilder, ArrayDataRef, ArrayRef, UInt32Array, UInt64Array};
+use arrow::compute;
 use arrow::csv::{Reader as CsvReader, ReaderBuilder as CsvReaderBuilder};
 use arrow::datatypes::*;
 use arrow::error::ArrowError;
@@ -77,7 +78,10 @@ impl DataFrame {
     }
 
     pub fn column_by_name(&self, name: &str) -> &Column {
-        let column_number = self.schema.column_with_name(name).unwrap();
+        let column_number = self
+            .schema
+            .column_with_name(name)
+            .expect("Column not found by name");
         let column = &self.columns[column_number.0];
         let field = self.schema.field(column_number.0);
         column
@@ -156,7 +160,7 @@ impl DataFrame {
     }
 
     /// Returns dataframe with the first n records selected
-    pub fn take(&self, count: usize) -> Self {
+    pub fn limit(&self, count: usize) -> Self {
         Self::new(
             self.schema.clone(),
             self.columns
@@ -165,11 +169,6 @@ impl DataFrame {
                 .map(|col| col.slice(0, Some(count)))
                 .collect(),
         )
-    }
-
-    /// Alias for `Self::take`
-    pub fn limit(&self, count: usize) -> Self {
-        self.take(count)
     }
 
     /// Filter the dataframe
@@ -187,8 +186,28 @@ impl DataFrame {
     }
 
     /// Sort the dataframe by specified criteria
-    pub fn sort(&self, criteria: &Vec<SortCriteria>) -> Self {
-        unimplemented!("Sorting not yet implemented")
+    ///
+    /// Note that the signature will be changed to return `Self` if all Arrow types can be sortable
+    pub fn sort(&self, criteria: &Vec<SortCriteria>) -> Result<Self> {
+        if criteria.len() != 1 {
+            return Err(DataFrameError::ComputeError(
+                "Sorting currently supports 1 sort criterion".to_string(),
+            ));
+        }
+        let options = criteria.first().unwrap();
+        let column = self.column_by_name(options.column.as_ref());
+        let array = column.to_array()?;
+        let sort_indices =
+            compute::kernels::sort::sort_to_indices(&array, Some(options.to_arrow_sort_options()))?;
+        self.sort_by_indices(&sort_indices)
+    }
+
+    fn sort_by_indices(&self, indices: &UInt32Array) -> Result<Self> {
+        let mut columns = Vec::with_capacity(self.num_columns());
+        for col in &self.columns {
+            columns.push(col.take(indices, 4096)?);
+        }
+        Ok(Self::from_columns(self.schema().clone(), columns))
     }
 
     /// Prints the data frame to console
@@ -586,18 +605,21 @@ impl DataFrame {
 
 #[cfg(test)]
 mod tests {
-    use crate::dataframe::DataFrame;
+
+    use super::*;
+
+    use arrow::array::*;
+    use arrow::datatypes::{DataType, Field, Float64Type, Schema};
+    use std::sync::Arc;
+
     use crate::functions::scalar::ScalarFunctions;
     use crate::{
         expression::{SqlDatabase, SqlWriteOptions},
         table::*,
     };
-    use arrow::array::*;
-    use arrow::datatypes::{DataType, Field, Float64Type};
-    use std::sync::Arc;
 
     #[test]
-    fn create_empty_dataframe() {
+    fn test_create_empty_dataframe() {
         let dataframe = DataFrame::empty();
 
         assert_eq!(0, dataframe.num_columns());
@@ -605,7 +627,7 @@ mod tests {
     }
 
     #[test]
-    fn read_csv_to_dataframe() {
+    fn test_read_csv_to_dataframe() {
         let dataframe = DataFrame::from_csv("./test/data/uk_cities_with_headers.csv", None);
 
         assert_eq!(3, dataframe.num_columns());
@@ -613,7 +635,7 @@ mod tests {
     }
 
     #[test]
-    fn read_postgres_table_to_then_save() {
+    fn test_read_postgres_table_to_then_save() {
         let connection_string = "postgres://postgres:password@localhost:5432/postgres";
         let mut dataframe = DataFrame::from_sql_table(connection_string, "arrow_data_types");
         assert!(dataframe.num_columns() > 3);
@@ -641,7 +663,7 @@ mod tests {
     }
 
     #[test]
-    fn dataframe_ops() {
+    fn test_dataframe_ops() {
         let mut dataframe = DataFrame::from_csv("./test/data/uk_cities_with_headers.csv", None);
         let a = dataframe.column_by_name("lat");
         let b = dataframe.column_by_name("lng");
@@ -732,7 +754,7 @@ mod tests {
     }
 
     #[test]
-    fn csv_io() {
+    fn test_csv_io() {
         let mut dataframe = DataFrame::from_csv("./test/data/uk_cities_with_headers.csv", None);
         let a = dataframe.column_by_name("lat");
         let b = dataframe.column_by_name("lng");
@@ -782,5 +804,38 @@ mod tests {
             array.value_slice(0, 10),
             &(1u64..11u64).collect::<Vec<u64>>()[..]
         );
+    }
+
+    #[test]
+    fn test_sort() {
+        let schema = Schema::new(vec![
+            Field::new("a", DataType::Int32, true),
+            Field::new("b", DataType::UInt8, false),
+        ]);
+        let a = Int32Array::from(vec![Some(1), None, Some(3), Some(4)]);
+        let b = UInt8Array::from(vec![5, 6, 7, 8]);
+        let frame = DataFrame::from_arrays(Arc::new(schema), vec![Arc::new(a), Arc::new(b)]);
+        let sort_criteria = SortCriteria {
+            column: "a".to_string(),
+            descending: true,
+        };
+        let sorted = frame.sort(&vec![sort_criteria]).unwrap();
+        let a = sorted.column(0);
+        let a_chunks = a.data().chunks();
+        assert_eq!(a_chunks.len(), 1);
+        let a_array = a_chunks[0].as_any().downcast_ref::<Int32Array>().unwrap();
+        assert!(a_array.is_null(3));
+        assert_eq!(a_array.value(0), 4);
+        assert_eq!(a_array.value(1), 3);
+        assert_eq!(a_array.value(2), 1);
+
+        let b = sorted.column(1);
+        let b_chunks = b.data().chunks();
+        assert_eq!(b_chunks.len(), 1);
+        let b_array = b_chunks[0].as_any().downcast_ref::<UInt8Array>().unwrap();
+        assert_eq!(b_array.value(0), 8);
+        assert_eq!(b_array.value(1), 7);
+        assert_eq!(b_array.value(2), 5);
+        assert_eq!(b_array.value(3), 6);
     }
 }

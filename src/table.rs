@@ -4,6 +4,8 @@ use arrow::array::*;
 use arrow::datatypes::*;
 use arrow::record_batch::RecordBatch;
 
+use crate::error::*;
+
 #[derive(Clone)]
 pub struct ChunkedArray {
     chunks: Vec<Arc<dyn Array>>,
@@ -89,7 +91,7 @@ impl ChunkedArray {
     }
 
     fn filter(&self, condition: &Self) -> Self {
-        let filtered: Result<Vec<ArrayRef>, arrow::error::ArrowError> = self
+        let filtered: arrow::error::Result<Vec<ArrayRef>> = self
             .chunks()
             .into_iter()
             .zip(condition.chunks())
@@ -131,6 +133,30 @@ pub struct Column {
     field: arrow::datatypes::Field,
 }
 
+fn col_to_numeric_array<T>(column: &Column) -> Result<ArrayRef>
+where
+    T: ArrowNumericType,
+{
+    let len = column.num_rows();
+    let mut builder = PrimitiveBuilder::<T>::new(len);
+    let arrays = col_to_prim_arrays::<T>(column);
+    for array in arrays {
+        if array.null_count() == 0 {
+            builder.append_slice(array.value_slice(array.offset(), array.len()))?;
+        } else {
+            builder.append_values(
+                array.value_slice(0, array.len()),
+                array
+                    .data()
+                    .null_buffer()
+                    .expect("Array has nulls but no null buffer")
+                    .data(),
+            )?;
+        }
+    }
+    Ok(Arc::new(builder.finish()))
+}
+
 impl Column {
     pub fn from_chunked_array(chunk: ChunkedArray, field: arrow::datatypes::Field) -> Self {
         Column { data: chunk, field }
@@ -144,6 +170,113 @@ impl Column {
         Column {
             data: ChunkedArray::from_arrays(arrays),
             field,
+        }
+    }
+
+    /// Merge the chunk arrays into a single array
+    pub fn to_array(&self) -> Result<ArrayRef> {
+        let len = self.num_rows();
+        match self.data_type() {
+            DataType::Null => Ok(Arc::new(NullArray::new(len))),
+            DataType::Boolean => todo!("find an efficient way of appending boolean arrays"),
+            DataType::Int8 => col_to_numeric_array::<Int8Type>(self),
+            DataType::Int16 => col_to_numeric_array::<Int16Type>(self),
+            DataType::Int32 => col_to_numeric_array::<Int32Type>(self),
+            DataType::Int64 => col_to_numeric_array::<Int64Type>(self),
+            DataType::UInt8 => col_to_numeric_array::<UInt8Type>(self),
+            DataType::UInt16 => col_to_numeric_array::<UInt16Type>(self),
+            DataType::UInt32 => col_to_numeric_array::<UInt32Type>(self),
+            DataType::UInt64 => col_to_numeric_array::<UInt64Type>(self),
+            DataType::Float16 => {
+                return Err(DataFrameError::ComputeError(
+                    "Not yet implemented".to_string(),
+                ))
+            }
+            DataType::Float32 => col_to_numeric_array::<Float32Type>(self),
+            DataType::Float64 => col_to_numeric_array::<Float64Type>(self),
+            DataType::Timestamp(unit, _) => match unit {
+                TimeUnit::Second => col_to_numeric_array::<TimestampSecondType>(self),
+                TimeUnit::Millisecond => col_to_numeric_array::<TimestampMillisecondType>(self),
+                TimeUnit::Microsecond => col_to_numeric_array::<TimestampMicrosecondType>(self),
+                TimeUnit::Nanosecond => col_to_numeric_array::<TimestampNanosecondType>(self),
+            },
+            DataType::Date32(unit) => col_to_numeric_array::<Date32Type>(self),
+            DataType::Date64(_) => col_to_numeric_array::<Date64Type>(self),
+            DataType::Time32(unit) => match unit {
+                TimeUnit::Second => col_to_numeric_array::<Time32SecondType>(self),
+                TimeUnit::Millisecond => col_to_numeric_array::<Time32MillisecondType>(self),
+                _ => unreachable!(),
+            },
+            DataType::Time64(unit) => match unit {
+                TimeUnit::Microsecond => col_to_numeric_array::<Time64MicrosecondType>(self),
+                TimeUnit::Nanosecond => col_to_numeric_array::<Time64NanosecondType>(self),
+                _ => unreachable!(),
+            },
+            DataType::Duration(unit) => match unit {
+                TimeUnit::Second => col_to_numeric_array::<DurationSecondType>(self),
+                TimeUnit::Millisecond => col_to_numeric_array::<DurationMillisecondType>(self),
+                TimeUnit::Microsecond => col_to_numeric_array::<DurationMicrosecondType>(self),
+                TimeUnit::Nanosecond => col_to_numeric_array::<DurationNanosecondType>(self),
+            },
+            DataType::Interval(unit) => match unit {
+                IntervalUnit::YearMonth => col_to_numeric_array::<IntervalYearMonthType>(self),
+                IntervalUnit::DayTime => col_to_numeric_array::<IntervalDayTimeType>(self),
+            },
+            DataType::Binary => {
+                return Err(DataFrameError::ComputeError(
+                    "Not yet implemented".to_string(),
+                ))
+            }
+            DataType::FixedSizeBinary(_) => {
+                return Err(DataFrameError::ComputeError(
+                    "Not yet implemented".to_string(),
+                ))
+            }
+            DataType::Utf8 => {
+                return Err(DataFrameError::ComputeError(
+                    "Not yet implemented".to_string(),
+                ))
+            }
+            DataType::List(_) => {
+                return Err(DataFrameError::ComputeError(
+                    "Not yet implemented".to_string(),
+                ))
+            }
+            DataType::FixedSizeList(_, _) => {
+                return Err(DataFrameError::ComputeError(
+                    "Not yet implemented".to_string(),
+                ))
+            }
+            DataType::Struct(_) => {
+                return Err(DataFrameError::ComputeError(
+                    "Not yet implemented".to_string(),
+                ))
+            }
+            DataType::Union(_) => {
+                return Err(DataFrameError::ComputeError(
+                    "Not yet implemented".to_string(),
+                ))
+            }
+            DataType::Dictionary(_, _) => {
+                return Err(DataFrameError::ComputeError(
+                    "Not yet implemented".to_string(),
+                ))
+            }
+            DataType::LargeBinary => {
+                return Err(DataFrameError::ComputeError(
+                    "Not yet implemented".to_string(),
+                ))
+            }
+            DataType::LargeUtf8 => {
+                return Err(DataFrameError::ComputeError(
+                    "Not yet implemented".to_string(),
+                ))
+            }
+            DataType::LargeList(_) => {
+                return Err(DataFrameError::ComputeError(
+                    "Not yet implemented".to_string(),
+                ))
+            }
         }
     }
 
@@ -178,6 +311,32 @@ impl Column {
     /// Filter this column using a Boolean column as the mask
     pub fn filter(&self, condition: &Self) -> Self {
         Self::from_chunked_array(self.data.filter(condition.data()), self.field.clone())
+    }
+
+    /// Create a new column by taking values at indices, while repartitioning to the chunk size
+    pub fn take(&self, indices: &UInt32Array, chunk_size: usize) -> Result<Self> {
+        let mut consumed_len = 0;
+        let total_len = indices.len();
+        let values = self.to_array()?;
+        let mut outputs = vec![];
+        while consumed_len < total_len {
+            let bounded_len = if total_len < chunk_size {
+                total_len
+            } else if consumed_len + chunk_size > total_len {
+                chunk_size
+            } else {
+                total_len - consumed_len
+            };
+            let slice = indices.slice(consumed_len, bounded_len);
+            let slice = slice.as_any().downcast_ref::<UInt32Array>().unwrap();
+            let taken = arrow::compute::take(&values, slice, None)?;
+            outputs.push(taken);
+            consumed_len += bounded_len;
+        }
+        Ok(Self {
+            data: ChunkedArray::from_arrays(outputs),
+            field: self.field.clone(),
+        })
     }
 
     fn flatten() {}
