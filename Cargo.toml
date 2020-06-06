@@ -5,19 +5,18 @@ authors = ["Neville Dipale <nevilledips@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-arrow = { git = "https://github.com/apache/arrow"}
-# arrow = { path = "../../arrow/rust/arrow"}
-parquet = { git = "https://github.com/apache/arrow" }
+arrow = { git = "https://github.com/nevi-me/arrow", branch = "concat-support" }
+parquet = { git = "https://github.com/nevi-me/arrow", branch = "concat-support" }
 num = "0.2"
 num-traits = "0.2"
 csv = "1"
 byteorder = "1"
 flatbuffers = "0.6"
 array_tool = "1"
-postgres = {version = "0.17.0", features = ["with-chrono-0_4", "with-uuid-0_8"]}
+postgres = {version = "0.17.3", features = ["with-chrono-0_4", "with-uuid-0_8"]}
 chrono = "0.4"
 # for lazy evaluation
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["preserve_order"] }
 # for parallel execution
-rayon = "1.0"
+rayon = "1.3"

@@ -4,7 +4,7 @@ use crate::error::DataFrameError;
 use crate::io::datasource::DataSourceEval;
 
 use arrow::datatypes::DataType;
-use arrow::error::ArrowError;
+use arrow::{compute::kernels::sort::SortOptions, error::ArrowError};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
@@ -308,6 +308,16 @@ pub enum Transformation {
 pub struct SortCriteria {
     pub column: String,
     pub descending: bool,
+    pub nulls_first: bool,
+}
+
+impl SortCriteria {
+    pub fn to_arrow_sort_options(&self) -> SortOptions {
+        SortOptions {
+            descending: self.descending,
+            nulls_first: false,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
