@@ -25,6 +25,8 @@ use crate::io::sql::{self, SqlDataSink, SqlDataSource};
 use crate::table::Column;
 use crate::utils;
 
+use compute::{SortColumn, SortOptions};
+
 pub struct DataFrame {
     schema: Arc<Schema>,
     columns: Vec<Column>,
@@ -189,16 +191,24 @@ impl DataFrame {
     ///
     /// Note that the signature will be changed to return `Self` if all Arrow types can be sortable
     pub fn sort(&self, criteria: &Vec<SortCriteria>) -> Result<Self> {
-        if criteria.len() != 1 {
+        if criteria.is_empty() {
             return Err(DataFrameError::ComputeError(
-                "Sorting currently supports 1 sort criterion".to_string(),
+                "Sort criteria cannot be empty".to_string(),
             ));
         }
-        let options = criteria.first().unwrap();
-        let column = self.column_by_name(options.column.as_ref());
-        let array = column.to_array()?;
-        let sort_indices =
-            compute::kernels::sort::sort_to_indices(&array, Some(options.to_arrow_sort_options()))?;
+        let mut lex_criteria = vec![];
+        for c in criteria {
+            let column = self.column_by_name(c.column.as_ref());
+            let array = column.to_array()?;
+            lex_criteria.push(SortColumn {
+                values: array,
+                options: Some(SortOptions {
+                    descending: c.descending,
+                    nulls_first: false,
+                }),
+            });
+        }
+        let sort_indices = compute::kernels::sort::lexsort_to_indices(&lex_criteria)?;
         self.sort_by_indices(&sort_indices)
     }
 
@@ -812,30 +822,40 @@ mod tests {
             Field::new("a", DataType::Int32, true),
             Field::new("b", DataType::UInt8, false),
         ]);
-        let a = Int32Array::from(vec![Some(1), None, Some(3), Some(4)]);
-        let b = UInt8Array::from(vec![5, 6, 7, 8]);
+        let a = Int32Array::from(vec![Some(1), Some(1), None, Some(3), Some(3), Some(4)]);
+        let b = UInt8Array::from(vec![9, 5, 6, 7, 4, 8]);
         let frame = DataFrame::from_arrays(Arc::new(schema), vec![Arc::new(a), Arc::new(b)]);
-        let sort_criteria = SortCriteria {
+        let sort_criteria_a = SortCriteria {
             column: "a".to_string(),
             descending: true,
+            nulls_first: false,
         };
-        let sorted = frame.sort(&vec![sort_criteria]).unwrap();
+        let sort_criteria_b = SortCriteria {
+            column: "b".to_string(),
+            descending: false,
+            nulls_first: false,
+        };
+        let sorted = frame.sort(&vec![sort_criteria_a, sort_criteria_b]).unwrap();
         let a = sorted.column(0);
         let a_chunks = a.data().chunks();
         assert_eq!(a_chunks.len(), 1);
         let a_array = a_chunks[0].as_any().downcast_ref::<Int32Array>().unwrap();
-        assert!(a_array.is_null(3));
+        assert!(a_array.is_null(5));
         assert_eq!(a_array.value(0), 4);
         assert_eq!(a_array.value(1), 3);
-        assert_eq!(a_array.value(2), 1);
+        assert_eq!(a_array.value(2), 3);
+        assert_eq!(a_array.value(3), 1);
+        assert_eq!(a_array.value(4), 1);
 
         let b = sorted.column(1);
         let b_chunks = b.data().chunks();
         assert_eq!(b_chunks.len(), 1);
         let b_array = b_chunks[0].as_any().downcast_ref::<UInt8Array>().unwrap();
         assert_eq!(b_array.value(0), 8);
-        assert_eq!(b_array.value(1), 7);
-        assert_eq!(b_array.value(2), 5);
-        assert_eq!(b_array.value(3), 6);
+        assert_eq!(b_array.value(1), 4);
+        assert_eq!(b_array.value(2), 7);
+        assert_eq!(b_array.value(3), 5);
+        assert_eq!(b_array.value(4), 9);
+        assert_eq!(b_array.value(5), 6);
     }
 }

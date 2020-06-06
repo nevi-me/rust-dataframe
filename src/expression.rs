@@ -308,6 +308,7 @@ pub enum Transformation {
 pub struct SortCriteria {
     pub column: String,
     pub descending: bool,
+    pub nulls_first: bool,
 }
 
 impl SortCriteria {

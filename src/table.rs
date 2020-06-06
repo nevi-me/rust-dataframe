@@ -139,21 +139,13 @@ where
 {
     let len = column.num_rows();
     let mut builder = PrimitiveBuilder::<T>::new(len);
-    let arrays = col_to_prim_arrays::<T>(column);
-    for array in arrays {
-        if array.null_count() == 0 {
-            builder.append_slice(array.value_slice(array.offset(), array.len()))?;
-        } else {
-            builder.append_values(
-                array.value_slice(0, array.len()),
-                array
-                    .data()
-                    .null_buffer()
-                    .expect("Array has nulls but no null buffer")
-                    .data(),
-            )?;
-        }
-    }
+    let arrays = column
+        .data()
+        .chunks()
+        .into_iter()
+        .map(|array| array.data())
+        .collect::<Vec<ArrayDataRef>>();
+    builder.append_data(&arrays[..])?;
     Ok(Arc::new(builder.finish()))
 }
 
@@ -261,27 +253,26 @@ impl Column {
                 return Err(DataFrameError::ComputeError(
                     "Not yet implemented".to_string(),
                 ))
-            }
-            t => {
-                return Err(DataFrameError::ComputeError(
-                    format!("Merging arrays not yet implemented for {:?}", t),
-                ))
-            }
-            // DataType::LargeBinary => {
-            //     return Err(DataFrameError::ComputeError(
-            //         "Not yet implemented".to_string(),
-            //     ))
-            // }
-            // DataType::LargeUtf8 => {
-            //     return Err(DataFrameError::ComputeError(
-            //         "Not yet implemented".to_string(),
-            //     ))
-            // }
-            // DataType::LargeList(_) => {
-            //     return Err(DataFrameError::ComputeError(
-            //         "Not yet implemented".to_string(),
-            //     ))
-            // }
+            } // t => {
+              //     return Err(DataFrameError::ComputeError(
+              //         format!("Merging arrays not yet implemented for {:?}", t),
+              //     ))
+              // }
+              // DataType::LargeBinary => {
+              //     return Err(DataFrameError::ComputeError(
+              //         "Not yet implemented".to_string(),
+              //     ))
+              // }
+              // DataType::LargeUtf8 => {
+              //     return Err(DataFrameError::ComputeError(
+              //         "Not yet implemented".to_string(),
+              //     ))
+              // }
+              // DataType::LargeList(_) => {
+              //     return Err(DataFrameError::ComputeError(
+              //         "Not yet implemented".to_string(),
+              //     ))
+              // }
         }
     }
 
