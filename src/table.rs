@@ -133,21 +133,6 @@ pub struct Column {
     field: arrow::datatypes::Field,
 }
 
-fn col_to_numeric_array<T>(column: &Column) -> Result<ArrayRef>
-where
-    T: ArrowNumericType,
-{
-    let len = column.num_rows();
-    let mut builder = PrimitiveBuilder::<T>::new(len);
-    let arrays = column
-        .data()
-        .chunks()
-        .iter()
-        .map(|array| array.data())
-        .collect::<Vec<ArrayDataRef>>();
-    builder.append_data(&arrays[..])?;
-    Ok(Arc::new(builder.finish()))
-}
 
 impl Column {
     pub fn from_chunked_array(chunk: ChunkedArray, field: arrow::datatypes::Field) -> Self {
@@ -166,111 +151,11 @@ impl Column {
     }
 
     /// Merge the chunk arrays into a single array
+    ///
+    /// Returns an error if concatenating the array type is not supported,
+    /// or the dataframe is empty
     pub fn to_array(&self) -> Result<ArrayRef> {
-        let len = self.num_rows();
-        match self.data_type() {
-            DataType::Null => Ok(Arc::new(NullArray::new(len))),
-            DataType::Boolean => todo!("find an efficient way of appending boolean arrays"),
-            DataType::Int8 => col_to_numeric_array::<Int8Type>(self),
-            DataType::Int16 => col_to_numeric_array::<Int16Type>(self),
-            DataType::Int32 => col_to_numeric_array::<Int32Type>(self),
-            DataType::Int64 => col_to_numeric_array::<Int64Type>(self),
-            DataType::UInt8 => col_to_numeric_array::<UInt8Type>(self),
-            DataType::UInt16 => col_to_numeric_array::<UInt16Type>(self),
-            DataType::UInt32 => col_to_numeric_array::<UInt32Type>(self),
-            DataType::UInt64 => col_to_numeric_array::<UInt64Type>(self),
-            DataType::Float16 => Err(DataFrameError::ComputeError(
-                "Not yet implemented".to_string(),
-            )),
-            DataType::Float32 => col_to_numeric_array::<Float32Type>(self),
-            DataType::Float64 => col_to_numeric_array::<Float64Type>(self),
-            DataType::Timestamp(unit, _) => match unit {
-                TimeUnit::Second => col_to_numeric_array::<TimestampSecondType>(self),
-                TimeUnit::Millisecond => col_to_numeric_array::<TimestampMillisecondType>(self),
-                TimeUnit::Microsecond => col_to_numeric_array::<TimestampMicrosecondType>(self),
-                TimeUnit::Nanosecond => col_to_numeric_array::<TimestampNanosecondType>(self),
-            },
-            DataType::Date32(unit) => col_to_numeric_array::<Date32Type>(self),
-            DataType::Date64(_) => col_to_numeric_array::<Date64Type>(self),
-            DataType::Time32(unit) => match unit {
-                TimeUnit::Second => col_to_numeric_array::<Time32SecondType>(self),
-                TimeUnit::Millisecond => col_to_numeric_array::<Time32MillisecondType>(self),
-                _ => unreachable!(),
-            },
-            DataType::Time64(unit) => match unit {
-                TimeUnit::Microsecond => col_to_numeric_array::<Time64MicrosecondType>(self),
-                TimeUnit::Nanosecond => col_to_numeric_array::<Time64NanosecondType>(self),
-                _ => unreachable!(),
-            },
-            DataType::Duration(unit) => match unit {
-                TimeUnit::Second => col_to_numeric_array::<DurationSecondType>(self),
-                TimeUnit::Millisecond => col_to_numeric_array::<DurationMillisecondType>(self),
-                TimeUnit::Microsecond => col_to_numeric_array::<DurationMicrosecondType>(self),
-                TimeUnit::Nanosecond => col_to_numeric_array::<DurationNanosecondType>(self),
-            },
-            DataType::Interval(unit) => match unit {
-                IntervalUnit::YearMonth => col_to_numeric_array::<IntervalYearMonthType>(self),
-                IntervalUnit::DayTime => col_to_numeric_array::<IntervalDayTimeType>(self),
-            },
-            DataType::Binary => {
-                let mut builder = BinaryBuilder::new(1);
-                let data: Vec<ArrayDataRef> =
-                    self.data().chunks().iter().map(|a| a.data()).collect();
-                builder.append_data(data.as_slice())?;
-                Ok(Arc::new(builder.finish()) as ArrayRef)
-            }
-            DataType::FixedSizeBinary(width) => {
-                let mut builder = FixedSizeBinaryBuilder::new(1, *width);
-                let data: Vec<ArrayDataRef> =
-                    self.data().chunks().iter().map(|a| a.data()).collect();
-                builder.append_data(data.as_slice())?;
-                Ok(Arc::new(builder.finish()) as ArrayRef)
-            }
-            DataType::Utf8 => {
-                let mut builder = StringBuilder::new(1);
-                let data: Vec<ArrayDataRef> =
-                    self.data().chunks().iter().map(|a| a.data()).collect();
-                builder.append_data(data.as_slice())?;
-                Ok(Arc::new(builder.finish()) as ArrayRef)
-            }
-            DataType::List(_)
-            | DataType::LargeList(_)
-            | DataType::LargeBinary
-            | DataType::LargeUtf8 => Err(DataFrameError::ComputeError(
-                "Not yet implemented".to_string(),
-            )),
-            DataType::FixedSizeList(_, _) => Err(DataFrameError::ComputeError(
-                "Not yet implemented".to_string(),
-            )),
-            DataType::Struct(_) => Err(DataFrameError::ComputeError(
-                "Not yet implemented".to_string(),
-            )),
-            DataType::Union(_) => Err(DataFrameError::ComputeError(
-                "Not yet implemented".to_string(),
-            )),
-            DataType::Dictionary(_, _) => Err(DataFrameError::ComputeError(
-                "Not yet implemented".to_string(),
-            )), // t => {
-                //     return Err(DataFrameError::ComputeError(
-                //         format!("Merging arrays not yet implemented for {:?}", t),
-                //     ))
-                // }
-                // DataType::LargeBinary => {
-                //     return Err(DataFrameError::ComputeError(
-                //         "Not yet implemented".to_string(),
-                //     ))
-                // }
-                // DataType::LargeUtf8 => {
-                //     return Err(DataFrameError::ComputeError(
-                //         "Not yet implemented".to_string(),
-                //     ))
-                // }
-                // DataType::LargeList(_) => {
-                //     return Err(DataFrameError::ComputeError(
-                //         "Not yet implemented".to_string(),
-                //     ))
-                // }
-        }
+        Ok(arrow::compute::concat(self.data().chunks())?)
     }
 
     pub fn name(&self) -> &str {
