@@ -27,7 +27,7 @@ impl ScalarFunctions {
     {
         left.par_iter()
             .zip(right.par_iter())
-            .map(|(a, b)| compute::add(a, b).into())
+            .map(|(a, b)| compute::add(a, b))
             .collect()
     }
     /// Subtract two columns of `PrimitiveArray` type together
@@ -45,7 +45,7 @@ impl ScalarFunctions {
     {
         left.iter()
             .zip(right.iter())
-            .map(|(a, b)| compute::subtract(a, b).into())
+            .map(|(a, b)| compute::subtract(a, b))
             .collect()
     }
     pub fn divide<T>(
@@ -63,7 +63,7 @@ impl ScalarFunctions {
     {
         left.iter()
             .zip(right.iter())
-            .map(|(a, b)| compute::divide(a, b).into())
+            .map(|(a, b)| compute::divide(a, b))
             .collect()
     }
     pub fn multiply<T>(
@@ -80,7 +80,7 @@ impl ScalarFunctions {
     {
         left.iter()
             .zip(right.iter())
-            .map(|(a, b)| compute::multiply(a, b).into())
+            .map(|(a, b)| compute::multiply(a, b))
             .collect()
     }
 
@@ -98,7 +98,7 @@ impl ScalarFunctions {
     {
         left.par_iter()
             .zip(right.par_iter())
-            .map(|(a, b)| compute::multiply(a, b).into())
+            .map(|(a, b)| compute::multiply(a, b))
             .collect()
     }
 
@@ -565,11 +565,11 @@ mod tests {
     fn test_primitive_array_abs_f64() {
         let a = Float64Array::from(vec![-5.2, -6.1, 7.3, -8.6, -0.0]);
         let c: &PrimitiveArray<Float64Type> = &ScalarFunctions::abs(vec![&a]).unwrap()[0];
-        assert_eq!(5.2, c.value(0));
-        assert_eq!(6.1, c.value(1));
-        assert_eq!(7.3, c.value(2));
-        assert_eq!(8.6, c.value(3));
-        assert_eq!(0.0, c.value(4));
+        assert!(5.2 - c.value(0) < f64::EPSILON);
+        assert!(6.1 - c.value(1) < f64::EPSILON);
+        assert!(7.3 - c.value(2) < f64::EPSILON);
+        assert!(8.6 - c.value(3) < f64::EPSILON);
+        assert!(0.0 - c.value(4) < f64::EPSILON);
     }
 
     #[test]
@@ -587,18 +587,18 @@ mod tests {
     fn test_primitive_array_acos_f64() {
         let a = Float64Array::from(vec![-0.2, 0.25, 0.75]);
         let c: &PrimitiveArray<Float64Type> = &ScalarFunctions::acos(vec![&a]).unwrap()[0];
-        assert_eq!(1.7721542475852274, c.value(0));
-        assert_eq!(1.318116071652818, c.value(1));
-        assert_eq!(0.7227342478134157, c.value(2));
+        assert!(1.7721542475852274 - c.value(0) < f64::EPSILON);
+        assert!(1.318116071652818 - c.value(1) < f64::EPSILON);
+        assert!(0.7227342478134157 - c.value(2) < f64::EPSILON);
     }
 
     #[test]
     fn test_primitive_array_cos_f64() {
         let a = Float64Array::from(vec![-0.2, 0.25, 0.75]);
         let c: &PrimitiveArray<Float64Type> = &ScalarFunctions::cos(vec![&a]).unwrap()[0];
-        assert_eq!(0.9800665778412416, c.value(0));
-        assert_eq!(0.9689124217106447, c.value(1));
-        assert_eq!(0.7316888688738209, c.value(2));
+        assert!(0.9800665778412416 - c.value(0) < f64::EPSILON);
+        assert!(0.9689124217106447 - c.value(1) < f64::EPSILON);
+        assert!(0.7316888688738209 - c.value(2) < f64::EPSILON);
     }
 
     #[test]

@@ -18,7 +18,7 @@ impl From<DataType> for ColumnType {
     fn from(dtype: DataType) -> Self {
         match dtype {
             DataType::Struct(_) => panic!("struct array conversion not yet supported"),
-            DataType::List(inner) => ColumnType::Array(*inner.clone()),
+            DataType::List(inner) => ColumnType::Array(*inner),
             _ => ColumnType::Scalar(dtype.clone()),
         }
     }
@@ -28,7 +28,7 @@ impl From<ColumnType> for DataType {
     fn from(from: ColumnType) -> Self {
         match from {
             ColumnType::Array(dtype) => DataType::List(Box::new(dtype)),
-            ColumnType::Scalar(dtype) => dtype.clone(),
+            ColumnType::Scalar(dtype) => dtype,
         }
     }
 }
@@ -80,12 +80,10 @@ pub struct Dataset {
 
 impl Dataset {
     pub fn get_column(&self, name: &str) -> Option<(usize, &Column)> {
-        let column = self
-            .columns
+        self.columns
             .iter()
             .enumerate()
-            .find(|(index, col): &(usize, &Column)| &col.name == name);
-        return column;
+            .find(|(index, col): &(usize, &Column)| col.name == *name)
     }
 
     pub fn empty() -> Self {
@@ -115,8 +113,8 @@ impl Dataset {
 
     pub fn try_aggregate(
         &self,
-        groups: &Vec<&str>,
-        aggr: &Vec<Aggregation>,
+        groups: &[&str],
+        aggr: &[Aggregation],
     ) -> Result<Self, DataFrameError> {
         // check that the columns in the aggregate exist
         // TODO: might be a better way to loop
@@ -492,7 +490,7 @@ impl Calculation {
                 };
                 Ok(operations
                     .into_iter()
-                    .map(|op| Transformation::Calculate(op))
+                    .map(Transformation::Calculate)
                     .collect())
             }
             Array(a) => unimplemented!("array op"),
@@ -616,7 +614,7 @@ impl Computation {
                             output = Self::compute_read(&reader).output;
                             has_read_data = true;
                         }
-                        (t @ _, false) => panic!("Transformation {:?} requires input data", t),
+                        (t, false) => panic!("Transformation {:?} requires input data", t),
                         (Read(_), true) => panic!("Chained reads are currently not supported, a read has taken place already"),
                         (_, _) => unimplemented!(),
                     }
@@ -804,18 +802,17 @@ impl BooleanFilter {
                     }
                 },
                 BooleanInput::Column(column) => {
-                    let col = batch.schema().column_with_name(&column.name);
+                    let schema = batch.schema();
+                    let col = schema.column_with_name(&column.name);
                     match col {
                         Some((num, field)) => {
                             let col = batch.column(num);
-                            return Ok(col.clone());
+                            Ok(col.clone())
                         }
-                        None => {
-                            return Err(DataFrameError::ComputeError(format!(
-                                "Cannot find column {}",
-                                &column.name
-                            )));
-                        }
+                        None => Err(DataFrameError::ComputeError(format!(
+                            "Cannot find column {}",
+                            &column.name
+                        ))),
                     }
                 }
             },

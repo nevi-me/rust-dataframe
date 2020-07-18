@@ -53,7 +53,7 @@ where
 
 pub trait Evaluate: Sized {
     /// Evaluate a list of computations
-    fn evaluate(self, comp: &Vec<Computation>) -> Self;
+    fn evaluate(self, comp: &[Computation]) -> Self;
     /// Evaluate a calculation transformation
     fn calculate(self, calculation: &Calculation) -> Self;
     /// Evaluate a `Read` operation, returning the read data
@@ -63,7 +63,7 @@ pub trait Evaluate: Sized {
 }
 
 impl Evaluate for DataFrame {
-    fn evaluate(self, comp: &Vec<Computation>) -> Self {
+    fn evaluate(self, comp: &[Computation]) -> Self {
         use Transformation::*;
         let mut frame = self;
         // get the input columns from the dataframe
@@ -78,7 +78,9 @@ impl Evaluate for DataFrame {
                         let mut frame_b = DataFrame::empty();
                         frame_b = frame_b.evaluate(b);
                         // TODO: make sure that joined names follow same logic as LazyFrame
-                        frame_a.join(&frame_b, &criteria)
+                        frame_a
+                            .join(&frame_b, &criteria)
+                            .expect("Unable to join dataframes")
                     }
                     Select(cols) => frame.select(cols.iter().map(|s| s.as_str()).collect()),
                     Drop(cols) => frame.drop(cols.iter().map(|s| s.as_str()).collect()),
@@ -126,7 +128,7 @@ impl Evaluate for DataFrame {
                                 let b = table::col_to_prim_arrays::<UInt16Type>(
                                     columns.get(1).unwrap(),
                                 );
-                                eval_numeric_scalar_op(a, b, |a, b| op(a, b))
+                                eval_numeric_scalar_op(a, b, op)
                             }
                             DataType::UInt32 => {
                                 let op = match expr {
@@ -142,7 +144,7 @@ impl Evaluate for DataFrame {
                                 let b = table::col_to_prim_arrays::<UInt32Type>(
                                     columns.get(1).unwrap(),
                                 );
-                                eval_numeric_scalar_op(a, b, |a, b| op(a, b))
+                                eval_numeric_scalar_op(a, b, op)
                             }
                             DataType::UInt64 => {
                                 let op = match expr {
@@ -158,7 +160,7 @@ impl Evaluate for DataFrame {
                                 let b = table::col_to_prim_arrays::<UInt64Type>(
                                     columns.get(1).unwrap(),
                                 );
-                                eval_numeric_scalar_op(a, b, |a, b| op(a, b))
+                                eval_numeric_scalar_op(a, b, op)
                             }
                             DataType::Int16 => {
                                 let op = match expr {
@@ -172,7 +174,7 @@ impl Evaluate for DataFrame {
                                     table::col_to_prim_arrays::<Int16Type>(columns.get(0).unwrap());
                                 let b =
                                     table::col_to_prim_arrays::<Int16Type>(columns.get(1).unwrap());
-                                eval_numeric_scalar_op(a, b, |a, b| op(a, b))
+                                eval_numeric_scalar_op(a, b, op)
                             }
                             DataType::Int32 => {
                                 let op = match expr {
@@ -186,7 +188,7 @@ impl Evaluate for DataFrame {
                                     table::col_to_prim_arrays::<Int32Type>(columns.get(0).unwrap());
                                 let b =
                                     table::col_to_prim_arrays::<Int32Type>(columns.get(1).unwrap());
-                                eval_numeric_scalar_op(a, b, |a, b| op(a, b))
+                                eval_numeric_scalar_op(a, b, op)
                             }
                             DataType::Int64 => {
                                 let op = match expr {
@@ -200,7 +202,7 @@ impl Evaluate for DataFrame {
                                     table::col_to_prim_arrays::<Int64Type>(columns.get(0).unwrap());
                                 let b =
                                     table::col_to_prim_arrays::<Int64Type>(columns.get(1).unwrap());
-                                eval_numeric_scalar_op(a, b, |a, b| op(a, b))
+                                eval_numeric_scalar_op(a, b, op)
                             }
                             DataType::Float32 => {
                                 let op = match expr {
@@ -216,7 +218,7 @@ impl Evaluate for DataFrame {
                                 let b = table::col_to_prim_arrays::<Float32Type>(
                                     columns.get(1).unwrap(),
                                 );
-                                eval_numeric_scalar_op(a, b, |a, b| op(a, b))
+                                eval_numeric_scalar_op(a, b, op)
                             }
                             DataType::Float64 => {
                                 let op = match expr {
@@ -232,7 +234,7 @@ impl Evaluate for DataFrame {
                                 let b = table::col_to_prim_arrays::<Float64Type>(
                                     columns.get(1).unwrap(),
                                 );
-                                eval_numeric_scalar_op(a, b, |a, b| op(a, b))
+                                eval_numeric_scalar_op(a, b, op)
                             }
                             _ => panic!("Unsupported operation"),
                         }
@@ -262,7 +264,7 @@ impl Evaluate for DataFrame {
                                 let a = table::col_to_prim_arrays::<Float32Type>(
                                     columns.get(0).unwrap(),
                                 );
-                                eval_float1_scalar_op(a, |a| op(a))
+                                eval_float1_scalar_op(a, op)
                             }
                             DataType::Float64 => {
                                 let op = match expr {
@@ -275,7 +277,7 @@ impl Evaluate for DataFrame {
                                 let a = table::col_to_prim_arrays::<Float64Type>(
                                     columns.get(0).unwrap(),
                                 );
-                                eval_float1_scalar_op(a, |a| op(a))
+                                eval_float1_scalar_op(a, op)
                             }
                             _ => {
                                 panic!("Expecting float datatype for operation, found {:?}", dtype)
@@ -316,7 +318,7 @@ impl Evaluate for DataFrame {
                 &calculation.output.name,
             ),
             Function::Filter(filter) => self.filter(filter),
-            expr @ _ => panic!("Function {:?} not supported", expr),
+            expr => panic!("Function {:?} not supported", expr),
         }
     }
     fn read(reader: &Reader) -> Self {
@@ -331,7 +333,7 @@ impl Evaluate for DataFrame {
                 SqlDatabase::Postgres => {
                     DataFrame::from_sql_table(&options.connection_string, &table)
                 }
-                t @ _ => unimplemented!("SQL Protocol {:?} not yet supported", t),
+                t => unimplemented!("SQL Protocol {:?} not yet supported", t),
             },
         }
     }

@@ -112,9 +112,11 @@ impl ScalarOperation for CastOperation {
             ))
         } else {
             let a = &inputs[0];
-            let to_type = to_type.ok_or(ArrowError::InvalidArgumentError(
-                "Cast requires a target output datatype".to_string(),
-            ))?;
+            let to_type = to_type.ok_or_else(|| {
+                ArrowError::InvalidArgumentError(
+                    "Cast requires a target output datatype".to_string(),
+                )
+            })?;
 
             match &a.column_type {
                 ColumnType::Array(_) => Err(ArrowError::ComputeError(
@@ -125,7 +127,7 @@ impl ScalarOperation for CastOperation {
                     inputs: inputs.clone(),
                     output: Column {
                         name: name.unwrap_or(format!("{}({} as datatype)", Self::name(), &a.name)),
-                        column_type: ColumnType::Scalar(to_type.clone()),
+                        column_type: ColumnType::Scalar(to_type),
                     },
                     function: Function::Cast,
                 }]),
@@ -265,7 +267,7 @@ impl ScalarOperation for SinOperation {
                                 &a.name
                             ));
                             let cast_output = Column {
-                                name: cast_name.clone(),
+                                name: cast_name,
                                 column_type: ColumnType::Scalar(DataType::Float64),
                             };
                             Ok(vec![
