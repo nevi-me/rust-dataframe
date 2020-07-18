@@ -393,7 +393,7 @@ impl DataFrame {
         let schema = reader.schema();
         let mut batches = vec![];
 
-        while let Some(batch) = reader.next()? {
+        while let Some(batch) = reader.next_batch()? {
             batches.push(batch);
         }
 
@@ -408,12 +408,12 @@ impl DataFrame {
     pub fn from_json(path: &str, schema: Option<Arc<Schema>>) -> Self {
         let file = File::open(path).unwrap();
         let mut reader = match schema {
-            Some(schema) => JsonReader::new(BufReader::new(file), schema, 1024, None),
+            Some(schema) => JsonReader::new(file, schema, 1024, None),
             None => {
                 let builder = JsonReaderBuilder::new()
                     .infer_schema(None)
                     .with_batch_size(1024);
-                builder.build::<File>(file).unwrap()
+                builder.build::<_>(file).unwrap()
             }
         };
         let mut batches: Vec<RecordBatch> = vec![];
