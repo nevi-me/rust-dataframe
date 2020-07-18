@@ -78,7 +78,9 @@ impl Evaluate for DataFrame {
                         let mut frame_b = DataFrame::empty();
                         frame_b = frame_b.evaluate(b);
                         // TODO: make sure that joined names follow same logic as LazyFrame
-                        frame_a.join(&frame_b, &criteria)
+                        frame_a
+                            .join(&frame_b, &criteria)
+                            .expect("Unable to join dataframes")
                     }
                     Select(cols) => frame.select(cols.iter().map(|s| s.as_str()).collect()),
                     Drop(cols) => frame.drop(cols.iter().map(|s| s.as_str()).collect()),

@@ -68,7 +68,6 @@ pub(crate) fn calc_equijoin_indices(
             right_indices.append(&mut r);
         }
         JoinType::RightJoin => {
-            dbg!(&right_hash.values());
             right_hash
                 .iter()
                 .for_each(|(k, right): (&Vec<u8>, &Vec<usize>)| {
