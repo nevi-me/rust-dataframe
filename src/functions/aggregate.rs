@@ -87,7 +87,7 @@ impl AggregateFunctions {
         let mut sum = T::default_value();
         arrays
             .iter()
-            .for_each(|array| sum = sum + compute::sum(array).unwrap_or(T::default_value()));
+            .for_each(|array| sum = sum + compute::sum(array).unwrap_or_else(T::default_value));
 
         Some(sum)
     }

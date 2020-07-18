@@ -37,11 +37,7 @@ impl SqlDataSink for Postgres {
         )?;
         Ok(())
     }
-    fn write_to_table(
-        connection: &str,
-        table_name: &str,
-        batches: &Vec<RecordBatch>,
-    ) -> Result<()> {
+    fn write_to_table(connection: &str, table_name: &str, batches: &[RecordBatch]) -> Result<()> {
         if batches.is_empty() {
             return Err(DataFrameError::IoError(
                 "At least one batch should be provided to the SQL writer".to_string(),
@@ -143,6 +139,21 @@ fn get_postgres_type(field: &Field) -> Result<String> {
                 "Union type not yet supported".to_string(),
             ));
         }
+        DataType::LargeBinary => {
+            return Err(DataFrameError::SqlError(
+                "Type not yet supported".to_string(),
+            ));
+        }
+        DataType::LargeUtf8 => {
+            return Err(DataFrameError::SqlError(
+                "Type not yet supported".to_string(),
+            ));
+        }
+        DataType::LargeList(_) => {
+            return Err(DataFrameError::SqlError(
+                "Type not yet supported".to_string(),
+            ));
+        }
     };
     Ok(format!("{} {}", dtype, nullable))
 }
@@ -153,11 +164,11 @@ fn get_binary_writer<'a>(client: &'a mut Client, table_name: &str) -> Result<Cop
 
 fn write_to_binary(writer: &mut CopyInWriter, batch: &RecordBatch) -> Result<u64> {
     // write header
-    writer.write(MAGIC)?;
+    writer.write_all(MAGIC)?;
     // write flags
-    writer.write(&[0; 4])?;
+    writer.write_all(&[0; 4])?;
     // write header extension
-    writer.write(&[0; 4])?;
+    writer.write_all(&[0; 4])?;
 
     let column_len = batch.num_columns();
 
@@ -253,18 +264,28 @@ fn write_to_binary(writer: &mut CopyInWriter, batch: &RecordBatch) -> Result<u64
                     let arr = arr.as_any().downcast_ref::<BinaryArray>().unwrap();
                     arr.write_to_binary(writer, row)?;
                 }
+                arrow::datatypes::DataType::LargeBinary => {
+                    return Err(DataFrameError::SqlError(
+                        "Type not yet supported by PostgreSQL writer".to_string(),
+                    ));
+                }
                 arrow::datatypes::DataType::FixedSizeBinary(_) => {
                     return Err(DataFrameError::SqlError(
-                        "Duration type not yet supported by PostgreSQL writer".to_string(),
+                        "Type not yet supported by PostgreSQL writer".to_string(),
                     ));
                 }
                 arrow::datatypes::DataType::Utf8 => {
                     let arr = arr.as_any().downcast_ref::<StringArray>().unwrap();
                     arr.write_to_binary(writer, row)?;
                 }
-                arrow::datatypes::DataType::List(_) => {
+                arrow::datatypes::DataType::LargeUtf8 => {
                     return Err(DataFrameError::SqlError(
-                        "Duration type not yet supported by PostgreSQL writer".to_string(),
+                        "Type not yet supported by PostgreSQL writer".to_string(),
+                    ));
+                }
+                arrow::datatypes::DataType::List(_) | arrow::datatypes::DataType::LargeList(_) => {
+                    return Err(DataFrameError::SqlError(
+                        "Type not yet supported by PostgreSQL writer".to_string(),
                     ));
                 }
                 arrow::datatypes::DataType::FixedSizeList(_, _) => {
@@ -321,9 +342,10 @@ fn write_length_to_binary<W: Write>(writer: &mut W, length: usize) -> Result<()>
 impl WriteToBinary for BooleanArray {
     fn write_to_binary<W: Write>(&self, writer: &mut W, index: usize) -> Result<()> {
         write_length_to_binary(writer, std::mem::size_of::<u8>())?;
-        match self.value(index) {
-            true => writer.write_u8(1),
-            false => writer.write_u8(0),
+        if self.value(index) {
+            writer.write_u8(1)
+        } else {
+            writer.write_u8(0)
         }?;
         Ok(())
     }
@@ -430,7 +452,7 @@ impl WriteToBinary for StringArray {
         let value = self.value(index).as_bytes();
         dbg!(&value);
         write_length_to_binary(writer, value.len())?;
-        writer.write(value)?;
+        writer.write_all(value)?;
         Ok(())
     }
 }
@@ -439,7 +461,7 @@ impl WriteToBinary for BinaryArray {
     fn write_to_binary<W: Write>(&self, writer: &mut W, index: usize) -> Result<()> {
         let value = self.value(index);
         write_length_to_binary(writer, value.len())?;
-        writer.write(value)?;
+        writer.write_all(value)?;
         Ok(())
     }
 }
@@ -485,7 +507,7 @@ mod tests {
         // read an existing table
         let batches =
             Postgres::read_query(connection, "select * from arrow_data_types", None, 1024)?;
-        assert!(batches.len() > 0);
+        assert!(!batches.is_empty());
         // create a table
         let schema = batches[0].schema();
         Postgres::create_table(connection, "t2", &schema)?;

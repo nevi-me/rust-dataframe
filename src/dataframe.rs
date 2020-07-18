@@ -94,12 +94,9 @@ impl DataFrame {
         let mut fields = self.schema.fields().clone();
         // check if field exists, and overwrite it
         let col = self.schema.column_with_name(name);
-        match col {
-            Some((i, field)) => {
-                self = self.drop(vec![name]);
-                fields = self.schema.fields().clone();
-            }
-            None => {}
+        if let Some((i, field)) = col {
+            self = self.drop(vec![name]);
+            fields = self.schema.fields().clone();
         }
         fields.push(Field::new(
             name,
@@ -190,7 +187,7 @@ impl DataFrame {
     /// Sort the dataframe by specified criteria
     ///
     /// Note that the signature will be changed to return `Self` if all Arrow types can be sortable
-    pub fn sort(&self, criteria: &Vec<SortCriteria>) -> Result<Self> {
+    pub fn sort(&self, criteria: &[SortCriteria]) -> Result<Self> {
         if criteria.is_empty() {
             return Err(DataFrameError::ComputeError(
                 "Sort criteria cannot be empty".to_string(),
@@ -232,7 +229,7 @@ impl DataFrame {
     /// The id is a 64-bit array
     pub fn with_id(self, name: &str) -> Self {
         let distribution = &self.column(0).data.chunk_counts();
-        dbg!(&distribution);
+        #[allow(clippy::range_zip_with_len)]
         let arrays = distribution
             .iter()
             .zip(0..distribution.len())
@@ -304,7 +301,7 @@ impl DataFrame {
         let schema = self.schema.clone();
         let field_names: Vec<(usize, &str)> = schema
             .fields()
-            .into_iter()
+            .iter()
             .map(|c| {
                 col_num += 1;
                 (col_num as usize, c.name().as_str())
@@ -375,7 +372,7 @@ impl DataFrame {
             }
         }
 
-        let schema: Arc<Schema> = batches[0].schema().clone();
+        let schema: Arc<Schema> = batches[0].schema();
 
         // convert to an arrow table
         let table = crate::table::Table::from_record_batches(schema.clone(), batches);
@@ -434,7 +431,7 @@ impl DataFrame {
             }
         }
 
-        let schema: Arc<Schema> = batches[0].schema().clone();
+        let schema: Arc<Schema> = batches[0].schema();
 
         // convert to an arrow table
         let table = crate::table::Table::from_record_batches(schema.clone(), batches);
@@ -448,17 +445,15 @@ impl DataFrame {
 
     pub fn from_parquet(path: &str) -> Result<Self> {
         let attr = metadata(path)?;
-        let paths;
-        if attr.is_dir() {
+        let paths = if attr.is_dir() {
             let readdir = read_dir(path)?;
-            paths = readdir
-                .into_iter()
+            readdir
                 .filter_map(|r| r.ok())
                 .map(|entry| entry.path())
-                .collect();
+                .collect()
         } else {
-            paths = vec![PathBuf::from(path)];
-        }
+            vec![PathBuf::from(path)]
+        };
 
         let mut schema = None;
         let mut batches = vec![];
@@ -501,7 +496,7 @@ impl DataFrame {
         if batches.is_empty() {
             DataFrame::empty()
         } else {
-            let schema = batches.get(0).unwrap().schema().clone();
+            let schema = batches.get(0).unwrap().schema();
             let table = crate::table::Table::from_record_batches(schema.clone(), batches);
             DataFrame {
                 schema,
@@ -690,10 +685,10 @@ impl DataFrame {
         let mut joined_columns = Vec::with_capacity(self.num_columns() + other.num_columns());
         for col in &self.columns {
             joined_columns.push(col.take(&left, 4096)?);
-                }
+        }
         for col in &other.columns {
             joined_columns.push(col.take(&right, 4096)?);
-                }
+        }
 
         // create merged schema
         let mut merged_fields = self.schema().fields().clone();
@@ -785,9 +780,11 @@ mod tests {
 
         assert_eq!(4, dataframe.num_columns());
         assert_eq!(4, dataframe.schema().fields().len());
-        assert_eq!(
-            54.31776,
-            col_to_prim_arrays::<Float64Type>(dataframe.column_by_name("lat_lng_sum"))[0].value(0)
+        assert!(
+            54.31776
+                - col_to_prim_arrays::<Float64Type>(dataframe.column_by_name("lat_lng_sum"))[0]
+                    .value(0)
+                < 0.0001
         );
 
         dataframe = dataframe.with_column_renamed("lat_lng_sum", "ll_sum");
@@ -815,7 +812,7 @@ mod tests {
         ))
         .unwrap();
 
-        assert_eq!(3.335724, abs[0].value(0));
+        assert!(3.335724 - abs[0].value(0) < f64::EPSILON);
     }
 
     #[test]
@@ -886,7 +883,7 @@ mod tests {
             Column::from_arrays(lowercase, Field::new("city_lower", DataType::Utf8, true)),
         );
 
-        let write = dataframe.to_csv("/tmp/uk_cities_out.csv");
+        let write = dataframe.to_csv("target/uk_cities_out.csv");
         assert!(write.is_ok());
     }
 
@@ -926,7 +923,7 @@ mod tests {
             descending: false,
             nulls_first: false,
         };
-        let sorted = frame.sort(&vec![sort_criteria_a, sort_criteria_b]).unwrap();
+        let sorted = frame.sort(&[sort_criteria_a, sort_criteria_b]).unwrap();
         let a = sorted.column(0);
         let a_chunks = a.data().chunks();
         assert_eq!(a_chunks.len(), 1);
@@ -957,9 +954,9 @@ mod tests {
         let b = DataFrame::from_sql_table(connection_string, "join_test_j2");
         let joined = a
             .join(
-            &b,
-            &JoinCriteria {
-                join_type: JoinType::LeftJoin,
+                &b,
+                &JoinCriteria {
+                    join_type: JoinType::LeftJoin,
                     criteria: vec![("b".to_string(), "d".to_string())],
                 },
             )
@@ -979,8 +976,8 @@ mod tests {
                 &b,
                 &JoinCriteria {
                     join_type: JoinType::RightJoin,
-                criteria: vec![("a".to_string(), "d".to_string())],
-            },
+                    criteria: vec![("a".to_string(), "d".to_string())],
+                },
             )
             .unwrap();
         joined.display().unwrap();

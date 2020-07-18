@@ -1,5 +1,8 @@
 use std::convert::TryFrom;
-use std::{io::Read, sync::Arc};
+use std::{
+    io::{Read, Write},
+    sync::Arc,
+};
 
 use arrow::array::*;
 use arrow::buffer::Buffer;
@@ -16,8 +19,8 @@ use crate::io::sql::SqlDataSource;
 
 impl SqlDataSource for Postgres {
     fn get_table_schema(connection_string: &str, table_name: &str) -> crate::error::Result<Schema> {
-        let (table_schema, table_name) = if table_name.contains(".") {
-            let split = table_name.split(".").collect::<Vec<&str>>();
+        let (table_schema, table_name) = if table_name.contains('.') {
+            let split = table_name.split('.').collect::<Vec<&str>>();
             if split.len() != 2 {
                 return Err(DataFrameError::IoError(
                     "table name must have schema and table name only, or just table name"
@@ -46,7 +49,7 @@ impl SqlDataSource for Postgres {
                 numeric_precision: row.get("numeric_precision"),
                 datetime_precision: row.get("datetime_precision"),
             })
-            .map(|t| Field::try_from(t))
+            .map(Field::try_from)
             .collect();
         Ok(Schema::new(fields.unwrap()))
     }
@@ -177,7 +180,7 @@ impl PostgresReadIterator {
 }
 
 impl RecordBatchReader for PostgresReadIterator {
-    fn schema(&mut self) -> arrow::datatypes::SchemaRef {
+    fn schema(&self) -> arrow::datatypes::SchemaRef {
         Arc::new(self.schema.clone())
     }
     fn next_batch(&mut self) -> arrow::error::Result<Option<RecordBatch>> {
@@ -250,7 +253,7 @@ impl TryFrom<PgDataType> for Field {
                 Ok(DataType::Timestamp(TimeUnit::Microsecond, None))
             }
             "uuid" => Ok(DataType::Binary), // TODO: use a more specialised data type
-            t @ _ => {
+            t => {
                 eprintln!("Conversion not set for data type: {:?}", t);
                 Err(())
             }
@@ -319,7 +322,7 @@ fn pg_to_arrow_type(dt: &Type) -> Option<DataType> {
         //        &VARBIT => None,
         //        &NUMERIC => None,
         &Type::UUID => Some(DataType::FixedSizeBinary(16)),
-        t @ _ => panic!("Postgres type {:?} not supported", t),
+        t => panic!("Postgres type {:?} not supported", t),
     }
 }
 
@@ -418,7 +421,7 @@ fn read_table_by_rows(
                         field_builder.append_value(row.get(j)).unwrap();
                     }
                 }
-                t @ _ => panic!("Field builder for {:?} not yet supported", t),
+                t => panic!("Field builder for {:?} not yet supported", t),
             }
         }
         // TODO perhaps change the order of processing so we can do this earlier
@@ -483,6 +486,44 @@ where
     let mut null_buffers: Vec<Vec<bool>> = vec![vec![]; field_len];
     let mut offset_buffers: Vec<Vec<i32>> = vec![vec![]; field_len];
 
+    let default_values: Vec<Vec<u8>> = schema
+        .fields()
+        .iter()
+        .map(|f| match f.data_type() {
+            DataType::Null => vec![],
+            DataType::Boolean => vec![0],
+            DataType::Int8 => vec![0],
+            DataType::Int16 => vec![0; 2],
+            DataType::Int32 => vec![0; 4],
+            DataType::Int64 => vec![0; 8],
+            DataType::UInt8 => vec![0],
+            DataType::UInt16 => vec![0; 2],
+            DataType::UInt32 => vec![0; 4],
+            DataType::UInt64 => vec![0; 8],
+            DataType::Float16 => vec![0; 2],
+            DataType::Float32 => vec![0; 4],
+            DataType::Float64 => vec![0; 8],
+            DataType::Timestamp(_, _) => vec![0; 8],
+            DataType::Date32(_) => vec![0; 4],
+            DataType::Date64(_) => vec![0; 8],
+            DataType::Time32(_) => vec![0; 4],
+            DataType::Time64(_) => vec![0; 8],
+            DataType::Duration(_) => vec![0; 8],
+            DataType::Interval(_) => vec![0; 8],
+            DataType::Binary => vec![],
+            DataType::FixedSizeBinary(len) => vec![0; *len as usize],
+            DataType::Utf8 => vec![],
+            DataType::List(_) => vec![],
+            DataType::FixedSizeList(_, len) => vec![0; *len as usize],
+            DataType::Struct(_) => vec![],
+            DataType::Union(_) => vec![],
+            DataType::Dictionary(_, _) => vec![],
+            DataType::LargeBinary => vec![],
+            DataType::LargeUtf8 => vec![],
+            DataType::LargeList(_) => vec![],
+        })
+        .collect();
+
     let mut record_num = -1;
     while !is_done {
         record_num += 1;
@@ -519,6 +560,7 @@ where
             if col_length == -1 {
                 // null value
                 null_buffers[i].push(false);
+                buffers[i].write_all(default_values[i].as_slice())?;
             } else {
                 null_buffers[i].push(true);
                 // big endian data, needs to be converted to little endian
@@ -541,7 +583,7 @@ where
         .zip(schema.fields().iter())
         .enumerate()
         .for_each(|(i, ((b, n), f))| {
-            let null_count = n.iter().filter(|v| v == &&false).collect::<Vec<_>>().len();
+            let null_count = n.iter().filter(|v| v == &&false).count();
             let mut null_buffer = BooleanBufferBuilder::new(n.len() / 8 + 1);
             null_buffer.append_slice(&n[..]).unwrap();
             let null_buffer = null_buffer.finish();
@@ -603,7 +645,7 @@ where
                     );
                     arrays.push(crate::utils::make_array(Arc::new(data)))
                 }
-                DataType::Binary | DataType::Utf8 => {
+                DataType::Binary | DataType::Utf8 | DataType::LargeBinary | DataType::LargeUtf8 => {
                     // recontruct offsets
                     let mut offset = 0;
                     let mut offsets = vec![0];
@@ -622,7 +664,7 @@ where
                     );
                     arrays.push(crate::utils::make_array(Arc::new(data)))
                 }
-                DataType::List(_) => {
+                DataType::List(_) | DataType::LargeList(_) => {
                     let data = ArrayData::new(
                         f.data_type().clone(),
                         n.len(),
@@ -686,6 +728,9 @@ fn read_col<R: Read>(reader: &mut R, data_type: &DataType, length: usize) -> Res
         DataType::Dictionary(_, _) => Err(()),
         DataType::Union(_) => Err(()),
         DataType::Null => Err(()),
+        DataType::LargeBinary => Err(()),
+        DataType::LargeUtf8 => Err(()),
+        DataType::LargeList(_) => Err(()),
     }
 }
 
@@ -814,7 +859,7 @@ mod tests {
         .unwrap();
         let schema = result.get(0).map(|rb| rb.schema()).unwrap();
         // create dataframe and write the batches to it
-        let table = crate::table::Table::from_record_batches(schema.clone(), result);
+        let table = crate::table::Table::from_record_batches(schema, result);
         let df = crate::dataframe::DataFrame::from_table(table);
         df.to_csv("target/debug/arrow_data_from_sql.csv").unwrap();
     }
@@ -830,7 +875,7 @@ mod tests {
         .unwrap();
         let schema = result.get(0).map(|rb| rb.schema()).unwrap();
         // create dataframe and write the batches to it
-        let table = crate::table::Table::from_record_batches(schema.clone(), result);
+        let table = crate::table::Table::from_record_batches(schema, result);
         let df = crate::dataframe::DataFrame::from_table(table);
         df.to_csv("target/debug/arrow_data_from_sql_query.csv")
             .unwrap();

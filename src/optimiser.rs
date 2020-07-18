@@ -2,7 +2,7 @@ use crate::expression::*;
 
 use Transformation as Tx;
 
-pub(crate) fn optimise(computations: &Vec<Computation>) -> Vec<Computation> {
+pub(crate) fn optimise(computations: &[Computation]) -> Vec<Computation> {
     let mut output = vec![];
     let mut input = Computation::empty();
     for c in computations {
@@ -266,7 +266,7 @@ mod tests {
                     "lat".to_string(),
                     // "lng".to_string(),
                 ])],
-                output: comp_clone.output.clone(),
+                output: comp_clone.output,
             },
             // read comes last
             computation,

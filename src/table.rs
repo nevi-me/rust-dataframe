@@ -18,7 +18,7 @@ impl ChunkedArray {
     ///
     /// There must be at least 1 array, and all arrays must have the same data type.
     fn from_arrays(arrays: Vec<Arc<dyn Array>>) -> Self {
-        assert!(arrays.len() > 0);
+        assert!(!arrays.is_empty());
         let mut num_rows = 0;
         let mut null_count = 0;
         // check that arrays have the same type
@@ -93,7 +93,7 @@ impl ChunkedArray {
     fn filter(&self, condition: &Self) -> Self {
         let filtered: arrow::error::Result<Vec<ArrayRef>> = self
             .chunks()
-            .into_iter()
+            .iter()
             .zip(condition.chunks())
             .map(|(a, b): (&ArrayRef, &ArrayRef)| {
                 arrow::compute::filter(a.as_ref(), &BooleanArray::from(b.data()))
@@ -142,7 +142,7 @@ where
     let arrays = column
         .data()
         .chunks()
-        .into_iter()
+        .iter()
         .map(|array| array.data())
         .collect::<Vec<ArrayDataRef>>();
     builder.append_data(&arrays[..])?;
@@ -155,8 +155,8 @@ impl Column {
     }
 
     pub fn from_arrays(arrays: Vec<Arc<dyn Array>>, field: arrow::datatypes::Field) -> Self {
-        assert!(arrays.len() > 0);
-        for ref array in &arrays {
+        assert!(!arrays.is_empty());
+        for array in &arrays {
             assert!(array.data_type() == field.data_type());
         }
         Column {
@@ -179,11 +179,9 @@ impl Column {
             DataType::UInt16 => col_to_numeric_array::<UInt16Type>(self),
             DataType::UInt32 => col_to_numeric_array::<UInt32Type>(self),
             DataType::UInt64 => col_to_numeric_array::<UInt64Type>(self),
-            DataType::Float16 => {
-                return Err(DataFrameError::ComputeError(
-                    "Not yet implemented".to_string(),
-                ))
-            }
+            DataType::Float16 => Err(DataFrameError::ComputeError(
+                "Not yet implemented".to_string(),
+            )),
             DataType::Float32 => col_to_numeric_array::<Float32Type>(self),
             DataType::Float64 => col_to_numeric_array::<Float64Type>(self),
             DataType::Timestamp(unit, _) => match unit {
@@ -215,64 +213,63 @@ impl Column {
                 IntervalUnit::DayTime => col_to_numeric_array::<IntervalDayTimeType>(self),
             },
             DataType::Binary => {
-                return Err(DataFrameError::ComputeError(
-                    "Not yet implemented".to_string(),
-                ))
+                let mut builder = BinaryBuilder::new(1);
+                let data: Vec<ArrayDataRef> =
+                    self.data().chunks().iter().map(|a| a.data()).collect();
+                builder.append_data(data.as_slice())?;
+                Ok(Arc::new(builder.finish()) as ArrayRef)
             }
-            DataType::FixedSizeBinary(_) => {
-                return Err(DataFrameError::ComputeError(
-                    "Not yet implemented".to_string(),
-                ))
+            DataType::FixedSizeBinary(width) => {
+                let mut builder = FixedSizeBinaryBuilder::new(1, *width);
+                let data: Vec<ArrayDataRef> =
+                    self.data().chunks().iter().map(|a| a.data()).collect();
+                builder.append_data(data.as_slice())?;
+                Ok(Arc::new(builder.finish()) as ArrayRef)
             }
             DataType::Utf8 => {
-                return Err(DataFrameError::ComputeError(
-                    "Not yet implemented".to_string(),
-                ))
+                let mut builder = StringBuilder::new(1);
+                let data: Vec<ArrayDataRef> =
+                    self.data().chunks().iter().map(|a| a.data()).collect();
+                builder.append_data(data.as_slice())?;
+                Ok(Arc::new(builder.finish()) as ArrayRef)
             }
-            DataType::List(_) => {
-                return Err(DataFrameError::ComputeError(
-                    "Not yet implemented".to_string(),
-                ))
-            }
-            DataType::FixedSizeList(_, _) => {
-                return Err(DataFrameError::ComputeError(
-                    "Not yet implemented".to_string(),
-                ))
-            }
-            DataType::Struct(_) => {
-                return Err(DataFrameError::ComputeError(
-                    "Not yet implemented".to_string(),
-                ))
-            }
-            DataType::Union(_) => {
-                return Err(DataFrameError::ComputeError(
-                    "Not yet implemented".to_string(),
-                ))
-            }
-            DataType::Dictionary(_, _) => {
-                return Err(DataFrameError::ComputeError(
-                    "Not yet implemented".to_string(),
-                ))
-            } // t => {
-              //     return Err(DataFrameError::ComputeError(
-              //         format!("Merging arrays not yet implemented for {:?}", t),
-              //     ))
-              // }
-              // DataType::LargeBinary => {
-              //     return Err(DataFrameError::ComputeError(
-              //         "Not yet implemented".to_string(),
-              //     ))
-              // }
-              // DataType::LargeUtf8 => {
-              //     return Err(DataFrameError::ComputeError(
-              //         "Not yet implemented".to_string(),
-              //     ))
-              // }
-              // DataType::LargeList(_) => {
-              //     return Err(DataFrameError::ComputeError(
-              //         "Not yet implemented".to_string(),
-              //     ))
-              // }
+            DataType::List(_)
+            | DataType::LargeList(_)
+            | DataType::LargeBinary
+            | DataType::LargeUtf8 => Err(DataFrameError::ComputeError(
+                "Not yet implemented".to_string(),
+            )),
+            DataType::FixedSizeList(_, _) => Err(DataFrameError::ComputeError(
+                "Not yet implemented".to_string(),
+            )),
+            DataType::Struct(_) => Err(DataFrameError::ComputeError(
+                "Not yet implemented".to_string(),
+            )),
+            DataType::Union(_) => Err(DataFrameError::ComputeError(
+                "Not yet implemented".to_string(),
+            )),
+            DataType::Dictionary(_, _) => Err(DataFrameError::ComputeError(
+                "Not yet implemented".to_string(),
+            )), // t => {
+                //     return Err(DataFrameError::ComputeError(
+                //         format!("Merging arrays not yet implemented for {:?}", t),
+                //     ))
+                // }
+                // DataType::LargeBinary => {
+                //     return Err(DataFrameError::ComputeError(
+                //         "Not yet implemented".to_string(),
+                //     ))
+                // }
+                // DataType::LargeUtf8 => {
+                //     return Err(DataFrameError::ComputeError(
+                //         "Not yet implemented".to_string(),
+                //     ))
+                // }
+                // DataType::LargeList(_) => {
+                //     return Err(DataFrameError::ComputeError(
+                //         "Not yet implemented".to_string(),
+                //     ))
+                // }
         }
     }
 
@@ -348,15 +345,15 @@ impl Table {
     pub fn new(schema: Arc<Schema>, columns: Vec<Column>) -> Self {
         // assert that there are some columns
         assert!(
-            columns.len() > 0,
+            !columns.is_empty(),
             "at least one column must be defined to create a record batch"
         );
         // assert that all columns have the same row count
         let len = columns[0].data().num_rows();
-        for i in 1..columns.len() {
+        for column in &columns {
             assert_eq!(
                 len,
-                columns[i].data().num_rows(),
+                column.data().num_rows(),
                 "all columns in a record batch must have the same length"
             );
         }
@@ -448,21 +445,21 @@ impl Table {
     /// Columns are first created from the `RecordBatch`es, with schema validations being performed.
     /// A table is then created
     pub fn from_record_batches(schema: Arc<Schema>, record_batches: Vec<RecordBatch>) -> Self {
-        if record_batches.len() == 0 {
+        if record_batches.is_empty() {
             panic!("Error about record batches (copy from cpp)")
         }
         let num_columns = record_batches[0].num_columns();
         // let mut arrays: Vec<Vec<&Arc<Array>>> = vec![vec![]; num_columns];
         let mut arrays: Vec<Vec<Arc<dyn Array>>> = vec![vec![]; num_columns];
         // create columns from record batches
-        for ref batch in record_batches {
+        for batch in &record_batches {
             assert!(
                 batch.num_columns() == num_columns,
                 "Each record batch should have the same length as the first batch"
             );
-            for i in 0..num_columns {
-                arrays[i].push(batch.column(i).to_owned());
-            }
+            batch.columns().iter().enumerate().for_each(|(i, array)| {
+                arrays[i].push(array.to_owned());
+            });
         }
         let columns = arrays
             .iter()

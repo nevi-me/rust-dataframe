@@ -87,7 +87,7 @@ impl LazyFrame {
                 Box::new(self.expression.clone()),
                 Computation {
                     input: vec![self.output.clone()],
-                    transformations: ops.clone(),
+                    transformations: ops,
                     output: out_dataset,
                 },
             ),
@@ -108,7 +108,7 @@ impl LazyFrame {
                 };
                 let output = Dataset {
                     name: "renamed_dataset".to_owned(),
-                    columns: columns.clone(),
+                    columns,
                 };
 
                 let computation = Computation {
@@ -166,19 +166,18 @@ impl LazyFrame {
         let mut columns = vec![];
         let mut projected = vec![];
         for col in col_names {
-            let column = self
-                .output
-                .get_column(col)
-                .ok_or(DataFrameError::ComputeError(format!(
+            let column = self.output.get_column(col).ok_or_else(|| {
+                DataFrameError::ComputeError(format!(
                     "Column {:?} cannot be selected as it does not exist",
                     col
-                )))?;
+                ))
+            })?;
             columns.push(column.1.clone());
             projected.push(col.to_string());
         }
         let out_dataset = Dataset {
             name: "".to_string(),
-            columns: columns,
+            columns,
         };
         let computation = Computation {
             input: vec![self.output.clone()],
@@ -189,7 +188,7 @@ impl LazyFrame {
         Ok(Self {
             id: "projected_frame".to_owned(),
             expression,
-            output: out_dataset.clone(),
+            output: out_dataset,
         })
     }
 
@@ -219,7 +218,7 @@ impl LazyFrame {
         Ok(Self {
             id: "projected_frame".to_owned(),
             expression,
-            output: out_dataset.clone(),
+            output: out_dataset,
         })
     }
 
@@ -251,7 +250,7 @@ impl LazyFrame {
             })
     }
 
-    pub fn sort(&self, sort_criteria: &Vec<SortCriteria>) -> Result<Self, DataFrameError> {
+    pub fn sort(&self, sort_criteria: &[SortCriteria]) -> Result<Self, DataFrameError> {
         // in order to sort by a column, it has to exist and be sortable by
         // existence is easier to check, but sortability depends on what Arrow supports
         if sort_criteria.is_empty() {
@@ -262,18 +261,17 @@ impl LazyFrame {
         // check that columns exist (, and optionally have sortable column types)
         // let mut columns = vec![];
         for criteria in sort_criteria {
-            let col =
-                self.output
-                    .get_column(&criteria.column)
-                    .ok_or(DataFrameError::ComputeError(format!(
-                        "Column {:?} used in sort expression does not exist in dataframe",
-                        &criteria.column
-                    )))?;
+            let col = self.output.get_column(&criteria.column).ok_or_else(|| {
+                DataFrameError::ComputeError(format!(
+                    "Column {:?} used in sort expression does not exist in dataframe",
+                    &criteria.column
+                ))
+            })?;
             // TODO: check for sortability
         }
         let computation = Computation {
             input: vec![self.output.clone()],
-            transformations: vec![Transformation::Sort(sort_criteria.clone())],
+            transformations: vec![Transformation::Sort(sort_criteria.to_vec())],
             output: self.output.clone(),
         };
         let expression = Expression::Compute(Box::new(self.expression.clone()), computation);
@@ -392,7 +390,7 @@ mod tests {
             .unwrap();
         // materialise the frame
         let dataframe = frame.evaluate();
-        assert_eq!(
+        assert!(
             Float64Array::from(
                 dataframe
                     .column_by_name("sum")
@@ -403,8 +401,9 @@ mod tests {
                     .unwrap()
                     .data()
             )
-            .value_slice(0, 1)[0],
-            57.653484 - 3.335724,
+            .value_slice(0, 1)[0]
+                - (57.653484 - 3.335724)
+                < f64::EPSILON,
         );
     }
 

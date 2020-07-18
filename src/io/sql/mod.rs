@@ -24,6 +24,5 @@ pub trait SqlDataSource {
 
 pub trait SqlDataSink {
     fn create_table(connection: &str, table_name: &str, schema: &Arc<Schema>) -> Result<()>;
-    fn write_to_table(connection: &str, table_name: &str, batches: &Vec<RecordBatch>)
-        -> Result<()>;
+    fn write_to_table(connection: &str, table_name: &str, batches: &[RecordBatch]) -> Result<()>;
 }

@@ -28,10 +28,9 @@ impl DataSourceEval for Reader {
                     .infer_schema(options.max_records)
                     .with_batch_size(options.batch_size)
                     .with_delimiter(options.delimiter.unwrap_or(b','));
-                match options.projection.clone() {
-                    Some(projection) => builder = builder.with_projection(projection),
-                    None => {}
-                };
+                if let Some(projection) = options.projection.clone() {
+                    builder = builder.with_projection(projection);
+                }
                 // TODO set schema if user has set one
                 let file = File::open(&path)?;
                 let csv_reader = builder.build(file)?;
