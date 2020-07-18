@@ -26,14 +26,14 @@ pub(crate) fn calc_equijoin_indices(
     let left_columns = criteria
         .criteria
         .iter()
-        .map(|(l, _)| left.column_by_name(l.as_str()))
-        .collect::<Vec<&Column>>();
+        .map(|(l, _)| left.column_by_name(l.as_str()).to_array().unwrap())
+        .collect::<Vec<ArrayRef>>();
 
     let right_columns = criteria
         .criteria
         .iter()
-        .map(|(_, r)| right.column_by_name(r.as_str()))
-        .collect::<Vec<&Column>>();
+        .map(|(_, r)| right.column_by_name(r.as_str()).to_array().unwrap())
+        .collect::<Vec<ArrayRef>>();
 
     // build hash inputs for left criteria
     let (left_hash, left_nulls) = build_hash_inputs(left_columns, left.num_rows());
@@ -48,11 +48,16 @@ pub(crate) fn calc_equijoin_indices(
                 .iter()
                 .for_each(|(k, left): (&Vec<u8>, &Vec<usize>)| {
                     // find indices in right index
-                    let right = right_hash.get(k).map(|v| v.clone()).unwrap_or(vec![]);
+                    let right = right_hash.get(k).cloned().unwrap_or_default();
                     for l in left {
-                        for r in right.clone() {
+                        if right.is_empty() {
                             left_indices.push(Some(*l as u32));
-                            right_indices.push(Some(r as u32));
+                            right_indices.push(None);
+                        } else {
+                            for r in right.clone() {
+                                left_indices.push(Some(*l as u32));
+                                right_indices.push(Some(r as u32));
+                            }
                         }
                     }
                 });
@@ -63,15 +68,21 @@ pub(crate) fn calc_equijoin_indices(
             right_indices.append(&mut r);
         }
         JoinType::RightJoin => {
+            dbg!(&right_hash.values());
             right_hash
                 .iter()
                 .for_each(|(k, right): (&Vec<u8>, &Vec<usize>)| {
-                    // find indices in right index
-                    let left = left_hash.get(k).map(|v| v.clone()).unwrap_or(vec![]);
+                    // find indices in left index
+                    let left = left_hash.get(k).cloned().unwrap_or_default();
                     for r in right {
-                        for l in left.clone() {
-                            left_indices.push(Some(l as u32));
+                        if left.is_empty() {
+                            left_indices.push(None);
                             right_indices.push(Some(*r as u32));
+                        } else {
+                            for l in left.clone() {
+                                left_indices.push(Some(l as u32));
+                                right_indices.push(Some(*r as u32));
+                            }
                         }
                     }
                 });
@@ -86,14 +97,14 @@ pub(crate) fn calc_equijoin_indices(
                 .iter()
                 .for_each(|(k, left): (&Vec<u8>, &Vec<usize>)| {
                     // find indices in right index
-                    right_hash.get(k).map(|v| {
+                    if let Some(v) = right_hash.get(k) {
                         for l in left {
                             for r in v {
                                 left_indices.push(Some(*l as u32));
                                 right_indices.push(Some(*r as u32));
                             }
                         }
-                    });
+                    }
                 });
         }
         JoinType::FullJoin => {
@@ -101,14 +112,14 @@ pub(crate) fn calc_equijoin_indices(
                 .iter()
                 .for_each(|(k, left): (&Vec<u8>, &Vec<usize>)| {
                     // find indices in right index
-                    right_hash.get(k).map(|v| {
+                    if let Some(v) = right_hash.get(k) {
                         for l in left {
                             for r in v {
                                 left_indices.push(Some(*l as u32));
                                 right_indices.push(Some(*r as u32));
                             }
                         }
-                    });
+                    }
                 });
             left_nulls
                 .iter()
@@ -127,7 +138,7 @@ pub(crate) fn calc_equijoin_indices(
 }
 
 fn build_hash_inputs(
-    columns: Vec<&Column>,
+    arrays: Vec<ArrayRef>,
     table_len: usize,
 ) -> (HashMap<Vec<u8>, Vec<usize>>, HashSet<usize>) {
     // create hashmaps for left and right
@@ -137,9 +148,9 @@ fn build_hash_inputs(
         .map(|i| (i, vec![]))
         .collect::<Vec<(usize, Vec<u8>)>>();
 
-    columns
+    arrays
         .into_iter()
-        .for_each(|col: &Column| match col.data_type() {
+        .for_each(|col: ArrayRef| match col.data_type() {
             DataType::Boolean => {
                 populate_primitive_bytes::<BooleanType>(col, &mut bytes, &mut null_set);
             }
@@ -190,11 +201,14 @@ fn build_hash_inputs(
             DataType::Dictionary(_, _) => {}
             DataType::Union(_) => {}
             DataType::Null => {}
+            DataType::LargeBinary => {}
+            DataType::LargeUtf8 => {}
+            DataType::LargeList(_) => {}
         });
 
     // populate hashmap
     bytes.into_iter().for_each(|(index, bytes)| {
-        hash.entry(bytes).or_insert(vec![]).push(index);
+        hash.entry(bytes).or_insert_with(Vec::new).push(index);
     });
 
     // return results
@@ -202,24 +216,20 @@ fn build_hash_inputs(
 }
 
 fn populate_primitive_bytes<T: ArrowPrimitiveType>(
-    column: &Column,
+    array: ArrayRef,
     bytes: &mut Vec<(usize, Vec<u8>)>,
     null_set: &mut HashSet<usize>,
 ) {
-    let arrays = col_to_prim_arrays::<T>(column);
-    let mut offset = 0;
-    for array in arrays {
-        // check if array element is null?
-        for i in 0..(offset + array.len()) {
-            if !array.is_null(i) && !null_set.contains(&i) {
-                // array contains value, append bytes
-                bytes[i]
-                    .1
-                    .append(&mut array.value(i).to_byte_slice().to_vec());
-            } else {
-                null_set.insert(i);
-            }
+    let array = array.as_any().downcast_ref::<PrimitiveArray<T>>().unwrap();
+    // check if array element is null?
+    for i in 0..array.len() {
+        if !array.is_null(i) && !null_set.contains(&i) {
+            // array contains value, append bytes
+            bytes[i]
+                .1
+                .append(&mut array.value(i).to_byte_slice().to_vec());
+        } else {
+            null_set.insert(i);
         }
-        offset += array.len();
     }
 }

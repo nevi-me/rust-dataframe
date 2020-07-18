@@ -608,7 +608,7 @@ impl DataFrame {
         Ok(column)
     }
 
-    pub fn join(&self, other: &Self, criteria: &JoinCriteria) -> Self {
+    pub fn join(&self, other: &Self, criteria: &JoinCriteria) -> Result<Self> {
         // get join indices
         let (left_indices, right_indices) =
             crate::functions::join::calc_equijoin_indices(self, other, criteria);
@@ -645,8 +645,8 @@ impl DataFrame {
         let right_last = right_boundaries.len() - 1;
 
         // calculate cut-off points to ensure that left and right have the same lengths of columns
-        let left_bound = left_boundaries.clone();
-        let right_bound = right_boundaries.clone();
+        let left_bound = left_boundaries;
+        let right_bound = right_boundaries;
         let mut min_left;
         let mut min_right;
         let mut max_left;
@@ -654,22 +654,20 @@ impl DataFrame {
         let mut seen_left = 0;
         let mut seen_right = 0;
         let mut merged_boundaries = vec![];
-        dbg!((&seen_left, &seen_right, &left_last, &right_last));
         while seen_left <= left_last && seen_right <= right_last {
             let l: &(u32, u32, usize) = left_bound.get(seen_left).unwrap();
             let r: &(u32, u32, usize) = right_bound.get(seen_right).unwrap();
-            dbg!((&l, &r));
             min_left = l.0;
             max_left = l.1;
             min_right = r.0;
             max_right = r.1;
             let v = (
-                if min_left == min_right || min_left < min_right {
+                if min_left <= min_right {
                     min_left
                 } else {
                     min_right
                 },
-                if max_left == max_right || max_left < max_right {
+                if max_left <= max_right {
                     max_left
                 } else {
                     max_right
@@ -686,82 +684,23 @@ impl DataFrame {
             merged_boundaries.push(v);
         }
 
-        let mut left_buckets = vec![vec![]; left_boundaries.len()];
-        let mut right_buckets = vec![vec![]; right_boundaries.len()];
-
-        // fill the buckets
-        let left_slice = left_indices.as_slice();
-        let right_slice = right_indices.as_slice();
-        let mut left_unbalanced = 0;
-        let mut right_unbalanced = 0;
-
-        dbg!(&merged_boundaries);
-
-        left_indices.into_iter().for_each(|v| {
-            // determine which bucket to slot in
-            match v {
-                Some(v) => {
-                    let b = merged_boundaries
-                        .iter()
-                        .find(|(start, end, index, _)| &v >= start && &v < end)
-                        .expect("Invalid join bucket");
-                    left_buckets[b.2].push(Some(v));
-                }
-                None => {
-                    left_unbalanced += 1;
-                }
-            };
-        });
-        right_indices.into_iter().for_each(|v| {
-            // determine which bucket to slot in
-            match v {
-                Some(v) => {
-                    let b = right_boundaries
-                        .iter()
-                        .find(|(start, end, index)| &v >= start && &v < end)
-                        .expect("Invalid join bucket");
-                    right_buckets[b.2].push(Some(v));
-                }
-                None => {
-                    right_unbalanced += 1;
-                }
-            };
-        });
-
-        // we now have to slice through the right batch at the right length, to create equal chunk columns
-        // dbg!(&left_indices);
-        // dbg!(&right_indices);
-
         // reconstruct the record batches from both sides
-        let left_batches = left_buckets
-            .into_iter()
-            .zip(self.to_record_batches().iter())
-            .map(|(ix, batch): (_, &RecordBatch)| {
-                let ix_array = UInt32Array::from(ix);
-                let columns = batch
-                    .columns()
-                    .iter()
-                    .map(|array| arrow::compute::take(array, &ix_array, None).unwrap())
-                    .collect::<Vec<ArrayRef>>();
-                RecordBatch::try_new(batch.schema().clone(), columns).unwrap()
-            })
-            .collect::<Vec<RecordBatch>>();
+        let left = UInt32Array::from(left_indices);
+        let right = UInt32Array::from(right_indices);
+        let mut joined_columns = Vec::with_capacity(self.num_columns() + other.num_columns());
+        for col in &self.columns {
+            joined_columns.push(col.take(&left, 4096)?);
+                }
+        for col in &other.columns {
+            joined_columns.push(col.take(&right, 4096)?);
+                }
 
-        let right_batches = right_buckets
-            .into_iter()
-            .zip(other.to_record_batches().iter())
-            .map(|(ix, batch): (_, &RecordBatch)| {
-                let ix_array = UInt32Array::from(ix);
-                let columns = batch
-                    .columns()
-                    .iter()
-                    .map(|array| arrow::compute::take(array, &ix_array, None).unwrap())
-                    .collect::<Vec<ArrayRef>>();
-                RecordBatch::try_new(batch.schema().clone(), columns).unwrap()
-            })
-            .collect::<Vec<RecordBatch>>();
+        // create merged schema
+        let mut merged_fields = self.schema().fields().clone();
+        merged_fields.append(&mut other.schema().fields().clone());
+        let merged_schema = Arc::new(Schema::new(merged_fields));
 
-        panic!()
+        Ok(Self::from_columns(merged_schema, joined_columns))
     }
 }
 
@@ -1012,18 +951,59 @@ mod tests {
     }
 
     #[test]
-    fn test_join() {
+    fn test_left_join() {
         let connection_string = "postgres://postgres:password@localhost:5432/postgres";
-        let a = DataFrame::from_sql_table(connection_string, "j1");
-        dbg!(a.schema());
-        let b = DataFrame::from_sql_table(connection_string, "j2");
-        dbg!(b.schema());
-        let joined = a.join(
+        let a = DataFrame::from_sql_table(connection_string, "join_test_j1");
+        let b = DataFrame::from_sql_table(connection_string, "join_test_j2");
+        let joined = a
+            .join(
             &b,
             &JoinCriteria {
                 join_type: JoinType::LeftJoin,
+                    criteria: vec![("b".to_string(), "d".to_string())],
+                },
+            )
+            .unwrap();
+        joined.display().unwrap();
+        assert_eq!(joined.num_columns(), 6);
+        assert_eq!(joined.num_rows(), 9);
+    }
+
+    #[test]
+    fn test_right_join() {
+        let connection_string = "postgres://postgres:password@localhost:5432/postgres";
+        let a = DataFrame::from_sql_table(connection_string, "join_test_j1");
+        let b = DataFrame::from_sql_table(connection_string, "join_test_j2");
+        let joined = a
+            .join(
+                &b,
+                &JoinCriteria {
+                    join_type: JoinType::RightJoin,
                 criteria: vec![("a".to_string(), "d".to_string())],
             },
-        );
+            )
+            .unwrap();
+        joined.display().unwrap();
+        assert_eq!(joined.num_rows(), 10);
+        assert_eq!(joined.num_columns(), 6);
+    }
+
+    #[test]
+    fn test_inner_join() {
+        let connection_string = "postgres://postgres:password@localhost:5432/postgres";
+        let a = DataFrame::from_sql_table(connection_string, "join_test_j1");
+        let b = DataFrame::from_sql_table(connection_string, "join_test_j2");
+        let joined = a
+            .join(
+                &b,
+                &JoinCriteria {
+                    join_type: JoinType::InnerJoin,
+                    criteria: vec![("a".to_string(), "d".to_string())],
+                },
+            )
+            .unwrap();
+        joined.display().unwrap();
+        assert_eq!(joined.num_rows(), 4);
+        assert_eq!(joined.num_columns(), 6);
     }
 }
