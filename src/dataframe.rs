@@ -79,6 +79,10 @@ impl DataFrame {
         &self.columns[i]
     }
 
+    pub fn columns(&self) -> &Vec<Column> {
+        &self.columns
+    }
+    
     pub fn column_by_name(&self, name: &str) -> &Column {
         let column_number = self
             .schema

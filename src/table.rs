@@ -269,12 +269,23 @@ impl Table {
     // new fns
     fn add_column() {}
 
-    // fn remove_column(&self, _i: usize) -> Self {
-    //     Table {
-    //         schema: self.schema.clone(),
-    //         columns: self.columns
-    //     }
-    // }
+    fn remove_column(&self, i: usize) -> Self {
+        let legit_idx = i < self.columns().len();
+        assert_eq!(legit_idx, true, "Index of column does not exist" );
+
+        let mut columns = vec![];
+        for (idx, col) in self.columns().iter().enumerate() {
+            if idx != i {
+                let column = col.clone();
+                columns.push(column);
+            }
+        }
+
+        Table {
+            schema: self.schema.clone(),
+            columns: columns
+        }
+    }
 
     /// Replace a column in the table, producing a new `Table`
     fn set_column() {}
@@ -364,4 +375,28 @@ unsafe impl Send for Table {}
 unsafe impl Sync for Table {}
 
 #[cfg(test)]
-mod tests {}
+#[allow(dead_code)]
+mod tests {
+    use super::*;
+    use crate::dataframe::DataFrame;
+
+    #[test]
+    fn create_table_from_csv() {
+        let mut dataframe = DataFrame::from_csv("./test/data/uk_cities_with_headers.csv", None);
+        let cols = dataframe.columns();
+        let schema = dataframe.schema().clone();
+        let table = Table::new(schema, cols.to_vec());
+        assert_eq!(dataframe.columns().len(), table.columns().len())
+    }
+
+    #[test]
+    fn remove_column_from_table() {
+        let dataframe = DataFrame::from_csv("./test/data/uk_cities_with_headers.csv", None);
+        let cols = dataframe.columns();
+        let schema = dataframe.schema().clone();
+        let table = Table::new(schema, cols.to_vec());
+        let smaller_table = table.remove_column(1);
+
+        assert!(smaller_table.columns().len() < table.columns().len());
+    }
+}
