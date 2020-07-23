@@ -266,8 +266,22 @@ impl Table {
         &self.columns
     }
 
-    // new fns
-    fn add_column() {}
+    fn add_column(&mut self, new_column: Column) -> Self {
+        if self.columns.len() > 0 {
+            let nrows = new_column.num_rows();
+            assert_eq!(nrows, self.columns[0].num_rows(), "Columns must have equal number of rows");
+        }
+
+        // self.columns.push(new_column.clone());
+        let mut new_columns = self.columns.clone();
+        new_columns.push(new_column.clone());
+        let new_field = new_column.field;
+        let mut schema_fields = self.schema().fields().clone();
+        schema_fields.push(new_field);
+        let new_schema = Arc::new(Schema::new(schema_fields));
+
+        Table::new(new_schema, new_columns)
+    }
 
     fn remove_column(&self, i: usize) -> Self {
         let legit_idx = i < self.columns().len();
@@ -382,7 +396,7 @@ mod tests {
 
     #[test]
     fn create_table_from_csv() {
-        let mut dataframe = DataFrame::from_csv("./test/data/uk_cities_with_headers.csv", None);
+        let dataframe = DataFrame::from_csv("./test/data/uk_cities_with_headers.csv", None);
         let cols = dataframe.columns();
         let schema = dataframe.schema().clone();
         let table = Table::new(schema, cols.to_vec());
@@ -398,5 +412,15 @@ mod tests {
         let smaller_table = table.remove_column(1);
 
         assert!(smaller_table.columns().len() < table.columns().len());
+    }
+
+    #[test]
+    fn add_column_to_table() {
+        let dataframe = DataFrame::from_csv("./test/data/uk_cities_with_headers.csv", None);
+        let cols = dataframe.columns();
+        let schema = dataframe.schema().clone();
+        let mut table = Table::new(schema, cols.to_vec());
+        let larger_table = table.add_column(cols[0].clone());
+        assert!(larger_table.columns().len() > table.columns().len());
     }
 }
