@@ -283,7 +283,6 @@ impl Table {
     }
 
     fn remove_column(&mut self, i: usize) {
-        // if inplace do not return anything
         assert_eq!(i < self.columns().len(), true, "Index of column does not exist" );
         self.columns.remove(i);
         let mut fields = self.schema().fields().clone();
