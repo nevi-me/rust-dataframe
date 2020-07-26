@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use arrow::array::*;
 use arrow::datatypes::*;
@@ -266,25 +266,30 @@ impl Table {
         &self.columns
     }
 
-    // new fns
-    fn add_column() {}
-
-    fn remove_column(&self, i: usize) -> Self {
-        let legit_idx = i < self.columns().len();
-        assert_eq!(legit_idx, true, "Index of column does not exist" );
-
-        let mut columns = vec![];
-        for (idx, col) in self.columns().iter().enumerate() {
-            if idx != i {
-                let column = col.clone();
-                columns.push(column);
-            }
+    fn add_column(&mut self, new_column: Column) -> Self {
+        if self.columns.len() > 0 {
+            let nrows = new_column.num_rows();
+            assert_eq!(nrows, self.columns[0].num_rows(), "Columns must have equal number of rows");
         }
 
-        Table {
-            schema: self.schema.clone(),
-            columns: columns
-        }
+        let mut new_columns = self.columns.clone();
+        new_columns.push(new_column.clone());
+        let new_field = new_column.field;
+        let mut schema_fields = self.schema().fields().clone();
+        schema_fields.push(new_field);
+        let new_schema = Arc::new(Schema::new(schema_fields));
+
+        Table::new(new_schema, new_columns)
+    }
+
+    fn remove_column(&mut self, i: usize) {
+        // if inplace do not return anything
+        assert_eq!(i < self.columns().len(), true, "Index of column does not exist" );
+        self.columns.remove(i);
+        let mut fields = self.schema().fields().clone();
+        fields.remove(i);
+        let new_schema = Schema::new(fields);
+        self.schema = Arc::new(new_schema);
     }
 
     /// Replace a column in the table, producing a new `Table`
@@ -394,9 +399,12 @@ mod tests {
         let dataframe = DataFrame::from_csv("./test/data/uk_cities_with_headers.csv", None);
         let cols = dataframe.columns();
         let schema = dataframe.schema().clone();
-        let table = Table::new(schema, cols.to_vec());
-        let smaller_table = table.remove_column(1);
+        let mut table = Table::new(schema, cols.to_vec());
+        let before_num_cols = table.columns().len();
 
-        assert!(smaller_table.columns().len() < table.columns().len());
+        let something = table.remove_column(1);
+
+        let after_num_cols = table.columns().len();
+        assert!(after_num_cols < before_num_cols);
     }
 }
