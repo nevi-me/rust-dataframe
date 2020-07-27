@@ -266,7 +266,7 @@ impl Table {
         &self.columns
     }
 
-    fn add_column(&mut self, new_column: Column) /*-> Self*/ {
+    fn add_column(&mut self, new_column: Column) {
         if self.columns.len() > 0 {
             let nrows = new_column.num_rows();
             assert_eq!(nrows, self.columns[0].num_rows(), "Columns must have equal number of rows");
@@ -276,21 +276,12 @@ impl Table {
         let mut schema_fields = self.schema().fields().clone();
         schema_fields.push(new_field);
         self.schema = Arc::new(Schema::new(schema_fields));
-
-        // let mut new_columns = self.columns.clone();
-        // new_columns.push(new_column.clone());
-        // let new_field = new_column.field;
-        // let mut schema_fields = self.schema().fields().clone();
-        // schema_fields.push(new_field);
-        // let new_schema = Arc::new(Schema::new(schema_fields));
-
-        // Table::new(new_schema, new_columns)
     }
 
     fn remove_column(&mut self, i: usize) {
         assert_eq!(i < self.columns().len(), true, "Index of column does not exist" );
-        self.columns.remove(i);
         let mut fields = self.schema().fields().clone();
+        self.columns.remove(i);
         fields.remove(i);
         let new_schema = Schema::new(fields);
         self.schema = Arc::new(new_schema);
