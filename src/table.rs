@@ -266,20 +266,25 @@ impl Table {
         &self.columns
     }
 
-    fn add_column(&mut self, new_column: Column) -> Self {
+    fn add_column(&mut self, new_column: Column) /*-> Self*/ {
         if self.columns.len() > 0 {
             let nrows = new_column.num_rows();
             assert_eq!(nrows, self.columns[0].num_rows(), "Columns must have equal number of rows");
         }
-
-        let mut new_columns = self.columns.clone();
-        new_columns.push(new_column.clone());
-        let new_field = new_column.field;
+        self.columns.push(new_column.clone());
+        let new_field = new_column.field().clone();
         let mut schema_fields = self.schema().fields().clone();
         schema_fields.push(new_field);
-        let new_schema = Arc::new(Schema::new(schema_fields));
+        self.schema = Arc::new(Schema::new(schema_fields));
 
-        Table::new(new_schema, new_columns)
+        // let mut new_columns = self.columns.clone();
+        // new_columns.push(new_column.clone());
+        // let new_field = new_column.field;
+        // let mut schema_fields = self.schema().fields().clone();
+        // schema_fields.push(new_field);
+        // let new_schema = Arc::new(Schema::new(schema_fields));
+
+        // Table::new(new_schema, new_columns)
     }
 
     fn remove_column(&mut self, i: usize) {
@@ -400,10 +405,21 @@ mod tests {
         let schema = dataframe.schema().clone();
         let mut table = Table::new(schema, cols.to_vec());
         let before_num_cols = table.columns().len();
-
-        let something = table.remove_column(1);
-
+        table.remove_column(1);
         let after_num_cols = table.columns().len();
         assert!(after_num_cols < before_num_cols);
+    }
+
+    #[test]
+    fn add_column_to_table() {
+        let dataframe = DataFrame::from_csv("./test/data/uk_cities_with_headers.csv", None);
+        let cols = dataframe.columns();
+        let schema = dataframe.schema().clone();
+        let mut table = Table::new(schema, cols.to_vec());
+        let before_num_cols = table.columns().len();
+        table.add_column(cols[0].clone());
+        let after_num_cols = table.columns().len();
+        assert!(after_num_cols > before_num_cols);
+
     }
 }
