@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use arrow::array::*;
 use arrow::datatypes::*;
@@ -266,15 +266,26 @@ impl Table {
         &self.columns
     }
 
-    // new fns
-    fn add_column() {}
+    fn add_column(&mut self, new_column: Column) {
+        if self.columns.len() > 0 {
+            let nrows = new_column.num_rows();
+            assert_eq!(nrows, self.columns[0].num_rows(), "Columns must have equal number of rows");
+        }
+        self.columns.push(new_column.clone());
+        let new_field = new_column.field().clone();
+        let mut schema_fields = self.schema().fields().clone();
+        schema_fields.push(new_field);
+        self.schema = Arc::new(Schema::new(schema_fields));
+    }
 
-    // fn remove_column(&self, _i: usize) -> Self {
-    //     Table {
-    //         schema: self.schema.clone(),
-    //         columns: self.columns
-    //     }
-    // }
+    fn remove_column(&mut self, i: usize) {
+        assert_eq!(i < self.columns().len(), true, "Index of column does not exist" );
+        let mut fields = self.schema().fields().clone();
+        self.columns.remove(i);
+        fields.remove(i);
+        let new_schema = Schema::new(fields);
+        self.schema = Arc::new(new_schema);
+    }
 
     /// Replace a column in the table, producing a new `Table`
     fn set_column() {}
@@ -364,4 +375,42 @@ unsafe impl Send for Table {}
 unsafe impl Sync for Table {}
 
 #[cfg(test)]
-mod tests {}
+#[allow(dead_code)]
+mod tests {
+    use super::*;
+    use crate::dataframe::DataFrame;
+
+    #[test]
+    fn create_table_from_csv() {
+        let mut dataframe = DataFrame::from_csv("./test/data/uk_cities_with_headers.csv", None);
+        let cols = dataframe.columns();
+        let schema = dataframe.schema().clone();
+        let table = Table::new(schema, cols.to_vec());
+        assert_eq!(dataframe.columns().len(), table.columns().len())
+    }
+
+    #[test]
+    fn remove_column_from_table() {
+        let dataframe = DataFrame::from_csv("./test/data/uk_cities_with_headers.csv", None);
+        let cols = dataframe.columns();
+        let schema = dataframe.schema().clone();
+        let mut table = Table::new(schema, cols.to_vec());
+        let before_num_cols = table.columns().len();
+        table.remove_column(1);
+        let after_num_cols = table.columns().len();
+        assert!(after_num_cols < before_num_cols);
+    }
+
+    #[test]
+    fn add_column_to_table() {
+        let dataframe = DataFrame::from_csv("./test/data/uk_cities_with_headers.csv", None);
+        let cols = dataframe.columns();
+        let schema = dataframe.schema().clone();
+        let mut table = Table::new(schema, cols.to_vec());
+        let before_num_cols = table.columns().len();
+        table.add_column(cols[0].clone());
+        let after_num_cols = table.columns().len();
+        assert!(after_num_cols > before_num_cols);
+
+    }
+}
