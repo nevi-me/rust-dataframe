@@ -1,5 +1,5 @@
 use std::sync::{Arc, Mutex};
-
+use std::collections::{HashMap, HashSet};
 use arrow::array::*;
 use arrow::datatypes::*;
 use arrow::record_batch::RecordBatch;
@@ -217,6 +217,33 @@ impl Column {
         })
     }
 
+    pub fn hist(&self) -> HashMap<String, u32> {
+        let mut counter = HashMap::new();
+        let values = self.to_array().unwrap();
+
+        // TODO get datatype
+        // match self.data_type() {
+        //     _ => ()
+        // }
+
+        // TODO downcast according to datatype
+        let values = values.as_any().downcast_ref::<StringArray>().unwrap();
+
+        for i in 0..values.len() {
+            let elem_counter = counter.entry(values.value(i).to_string()).or_insert(0);
+            *elem_counter += 1;
+
+        }
+        counter
+    }
+
+    pub fn uniques(&self) -> Vec<String>{
+        let counter = self.hist();
+        let unique_values: Vec<String> = counter.iter().map(|(el, count)| el.clone()).collect();
+        unique_values
+
+    }
+
     fn flatten() {}
 }
 
@@ -257,7 +284,6 @@ impl Table {
         self.columns[0].data().num_rows()
     }
 
-    // keep fn
     pub fn column(&self, i: usize) -> &Column {
         &self.columns[i]
     }
@@ -266,6 +292,7 @@ impl Table {
         &self.columns
     }
 
+    /// Add column to dataframe inplace
     fn add_column(&mut self, new_column: Column) {
         if self.columns.len() > 0 {
             let nrows = new_column.num_rows();
@@ -278,6 +305,7 @@ impl Table {
         self.schema = Arc::new(Schema::new(schema_fields));
     }
 
+    /// Remove column from dataframe inplace
     fn remove_column(&mut self, i: usize) {
         assert_eq!(i < self.columns().len(), true, "Index of column does not exist" );
         let mut fields = self.schema().fields().clone();
@@ -411,6 +439,16 @@ mod tests {
         table.add_column(cols[0].clone());
         let after_num_cols = table.columns().len();
         assert!(after_num_cols > before_num_cols);
+    }
+
+    #[test]
+    fn get_column_unique_values() {
+        let mut dataframe = DataFrame::from_csv("./test/data/uk_cities_with_headers.csv", None);
+        let cols = dataframe.columns();
+        let column = &cols[0];
+        println!("values {:?}", column.to_array());
+        println!("uniques {:?}", column.uniques());
 
     }
+
 }
