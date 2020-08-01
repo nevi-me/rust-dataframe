@@ -128,39 +128,6 @@ pub fn col_to_string_arrays(column: &Column) -> Vec<&StringArray> {
     arrays
 }
 
-enum GenericType <'a> {
-    Integer(&'a arrow::array::Int64Array),
-    Float(&'a arrow::array::Float64Array),
-    String(&'a arrow::array::StringArray),
-    Unknown()
-}
-
-// struct MyGenericType<'a> {
-//     value: GenericType<'a>,
-//     ptr: *const u8,
-// }
-
-impl<'a> GenericType<'a> {
-
-    fn len(self) -> Option<usize> {
-        match self {
-            GenericType::Integer(c) => Some(c.len()),
-            GenericType::Float(c) => Some(c.len()),
-            GenericType::String(c) => Some(c.len()),
-            _ => None,
-        }
-    }
-
-    // fn values(self) -> arrow::array::ArrayRef {
-    //     match self {
-    //         GenericType::Integer(c) => *c.unwrap(),
-    //         _ => None
-    //     }
-    // }
-
-}
-
-
 /// A column data structure consisting of a `Field` and `ChunkedArray`
 #[derive(Clone)]
 pub struct Column {
@@ -252,59 +219,45 @@ impl Column {
         })
     }
 
-    pub fn hist(&self) -> HashMap<String, u32> {
+    pub fn hist(&self, probability: bool) -> HashMap<String, f64> {
         let mut counter = HashMap::new();
         let values = self.to_array().unwrap();
         let datatype = self.data_type();
-        println!("data type {:?}", datatype);
+        // println!("data type {:?}", datatype);
 
-        // TODO get datatype
         match self.data_type() {
             DataType::Utf8 => {
                 let values = values.as_any().downcast_ref::<StringArray>().unwrap();
                 for i in 0..values.len() {
-                    let elem_counter = counter.entry(values.value(i).to_string()).or_insert(0);
-                    *elem_counter += 1;
+                    let elem_counter = counter.entry(values.value(i).to_string()).or_insert(0f64);
+                    *elem_counter += 1f64;
                 }
             },
 
             DataType::Float64 => {
                 let values = values.as_any().downcast_ref::<Float64Array>().unwrap();
                 for i in 0..values.len() {
-                    let elem_counter = counter.entry(values.value(i).to_string()).or_insert(0);
-                    *elem_counter += 1;
+                    let elem_counter = counter.entry(values.value(i).to_string()).or_insert(0f64);
+                    *elem_counter += 1f64;
                 }
+                // elem_counter = elem_counter / values.len();
             },
             _ => panic!("Unsupported type")
         };
-        let array_value: GenericType;
 
-        // if let Some(string) = values.as_any().downcast_ref::<StringArray>() {
-        //     println!("It's a stringArray! {:?} ", string);
-        //     array_value = GenericType::String(string);
-        //  } else if let Some(float) = values.as_any().downcast_ref::<Float64Array>() {
-        //      println!("it's float64!");
-        //      array_value = GenericType::Float(float);
-        //  } else if let Some(int) = values.as_any().downcast_ref::<Int64Array>(){
-        //     println!("it's integer64");
-        //     array_value = GenericType::Integer(int);
-        // } else {
-        //     array_value = GenericType::Unknown();
-        // }
-        // let something = array_value.len();
-        // println!("some len {:?}", something);
-        // let values = values.as_any().downcast_ref::<StringArray>().unwrap();
-        // for i in 0..values.len() {
-        //     let elem_counter = counter.entry(values.value(i).to_string()).or_insert(0);
-        //     *elem_counter += 1;
-        // }
+        // let rates: Vec<f64> = counter.iter().map(|(_, count)| (*count/values.len()) as f64 ).collect();
+        if probability {
+            for val in counter.values_mut() {
+                *val = *val / values.len() as f64;
+            }
+        }
 
         counter
     }
 
     pub fn uniques(&self) -> Vec<String> {
         // compute histogram and take keys
-        let counter = self.hist();
+        let counter = self.hist(true);
         let unique_values: Vec<String> = counter.iter().map(|(el, count)| el.clone()).collect();
         unique_values
     }
@@ -507,13 +460,24 @@ mod tests {
     }
 
     #[test]
+    fn get_hist_column() {
+        let dataframe = DataFrame::from_csv("./test/data/uk_cities_with_headers.csv", None);
+        let cols = dataframe.columns();
+        let column = &cols[0];
+        println!("values {:?}", column.hist(true));
+        // println!("num uniques {:?}", column.uniques().len());
+        // assert_eq!(37, column.hist().len());
+
+    }
+
+    #[test]
     fn get_column_unique_values() {
         let dataframe = DataFrame::from_csv("./test/data/uk_cities_with_headers.csv", None);
         let cols = dataframe.columns();
         let column = &cols[2];
         // println!("values {:?}", column.to_array());
         // println!("num uniques {:?}", column.uniques().len());
-        assert_eq!(37, column.uniques().len());
+        assert_eq!(38, column.uniques().len());
 
     }
 
