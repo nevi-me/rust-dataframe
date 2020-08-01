@@ -1,8 +1,10 @@
 use std::sync::{Arc, Mutex};
+use std::rc::Rc;
 use std::collections::{HashMap, HashSet};
 use arrow::array::*;
 use arrow::datatypes::*;
 use arrow::record_batch::RecordBatch;
+use arrow::datatypes::DataType;
 
 use crate::error::*;
 
@@ -126,6 +128,26 @@ pub fn col_to_string_arrays(column: &Column) -> Vec<&StringArray> {
     arrays
 }
 
+enum GenericType <'a> {
+    Integer(&'a arrow::array::Int64Array),
+    Float(&'a arrow::array::Float64Array),
+    String(&'a arrow::array::StringArray),
+    Unknown()
+}
+
+// struct MyGenericType<'a> {
+//     value: GenericType<'a>,
+//     ptr: *const u8,
+// }
+
+impl<'a> GenericType<'a> {
+    fn values(&self) {
+
+    }
+
+}
+
+
 /// A column data structure consisting of a `Field` and `ChunkedArray`
 #[derive(Clone)]
 pub struct Column {
@@ -220,13 +242,40 @@ impl Column {
     pub fn hist(&self) -> HashMap<String, u32> {
         let mut counter = HashMap::new();
         let values = self.to_array().unwrap();
+        let datatype = self.data_type();
+        println!("data type {:?}", datatype);
 
         // TODO get datatype
-        // match self.data_type() {
-        //     _ => ()
-        // }
+        // let data_values = match self.data_type() {
+        //     DataType::Utf8 => {
+        //         let converted = values.as_any().downcast_ref::<StringArray>().unwrap();
+        //         converted
+        //     },
+        //     DataType::Float64 => {
+        //         let converted = values.as_any().downcast_ref::<Float64Array>().unwrap();
+        //         converted
+        //     },
+        //     _ => panic!("Unsupported type")
+        // };
+        let array_value: GenericType;
 
-        // TODO downcast according to datatype
+        if let Some(string) = values.as_any().downcast_ref::<StringArray>() {
+            println!("It's a stringArray! {:?} ", string);
+            array_value = GenericType::String(string);
+         } else if let Some(float) = values.as_any().downcast_ref::<Float64Array>() {
+             println!("it's float64!");
+             array_value = GenericType::Float(float);
+         } else if let Some(int) = values.as_any().downcast_ref::<Int64Array>(){
+            println!("it's integer64");
+            array_value = GenericType::Integer(int);
+        } else {
+            array_value = GenericType::Unknown();
+        }
+
+        let something = array_value.values();
+        // println!("{:?}", array_value);
+
+        // WIP this is working
         let values = values.as_any().downcast_ref::<StringArray>().unwrap();
 
         for i in 0..values.len() {
@@ -241,7 +290,6 @@ impl Column {
         let counter = self.hist();
         let unique_values: Vec<String> = counter.iter().map(|(el, count)| el.clone()).collect();
         unique_values
-
     }
 
     fn flatten() {}
@@ -446,8 +494,9 @@ mod tests {
         let mut dataframe = DataFrame::from_csv("./test/data/uk_cities_with_headers.csv", None);
         let cols = dataframe.columns();
         let column = &cols[0];
-        println!("values {:?}", column.to_array());
-        println!("uniques {:?}", column.uniques());
+        // println!("values {:?}", column.to_array());
+        // println!("num uniques {:?}", column.uniques().len());
+        assert_eq!(37, column.uniques().len());
 
     }
 
