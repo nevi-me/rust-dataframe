@@ -428,7 +428,7 @@ mod tests {
 
     #[test]
     fn create_table_from_csv() {
-        let mut dataframe = DataFrame::from_csv("./test/data/uk_cities_with_headers.csv", None);
+        let dataframe = DataFrame::from_csv("./test/data/uk_cities_with_headers.csv", None);
         let cols = dataframe.columns();
         let schema = dataframe.schema().clone();
         let table = Table::new(schema, cols.to_vec());
