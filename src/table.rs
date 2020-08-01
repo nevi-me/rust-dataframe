@@ -477,7 +477,7 @@ mod tests {
         let column = &cols[2];
         // println!("values {:?}", column.to_array());
         // println!("num uniques {:?}", column.uniques().len());
-        assert_eq!(38, column.uniques().len());
+        assert_eq!(37, column.uniques().len());
 
     }
 
