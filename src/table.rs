@@ -5,7 +5,7 @@ use arrow::array::*;
 use arrow::datatypes::*;
 use arrow::record_batch::RecordBatch;
 use arrow::datatypes::DataType;
-
+use histo::Histogram;
 use crate::error::*;
 
 #[derive(Clone)]
@@ -219,28 +219,53 @@ impl Column {
         })
     }
 
-    pub fn hist(&self, probability: bool) -> HashMap<String, f64> {
+    pub fn hist(&self, probability: bool) -> HashMap<String, u64> {
         let mut counter = HashMap::new();
+        // let mut bin_counter = HashMap::new();
+
         let values = self.to_array().unwrap();
         let datatype = self.data_type();
-        // println!("data type {:?}", datatype);
+        println!("data type {:?}", datatype);
 
         match self.data_type() {
             DataType::Utf8 => {
                 let values = values.as_any().downcast_ref::<StringArray>().unwrap();
                 for i in 0..values.len() {
-                    let elem_counter = counter.entry(values.value(i).to_string()).or_insert(0f64);
-                    *elem_counter += 1f64;
+                    let elem_counter = counter.entry(values.value(i).to_string()).or_insert(0u64);
+                    *elem_counter += 1u64;
                 }
             },
 
             DataType::Float64 => {
                 let values = values.as_any().downcast_ref::<Float64Array>().unwrap();
+                // TODO add bins and counter per bin
+                // let mut minvalue = values.value(0);
+                // let mut maxvalue = values.value(0);
+                // for i in 0..values.len() {
+                //     if values.value(i) < minvalue { minvalue = values.value(i)}
+                //     if values.value(i) > maxvalue { maxvalue = values.value(i)}
+                // }
+                // println!("min {} max {}", minvalue, maxvalue);
+                // let mut histogram = Histogram::new();
+                let mut histogram = Histogram::with_buckets(10);
                 for i in 0..values.len() {
-                    let elem_counter = counter.entry(values.value(i).to_string()).or_insert(0f64);
-                    *elem_counter += 1f64;
+                    histogram.add(values.value(i) as u64);
+                    // no longer necessary
+                    // let elem_counter = counter.entry(values.value(i).to_string()).or_insert(0u64);
+                    // *elem_counter += 1u64;
                 }
-                // elem_counter = elem_counter / values.len();
+                println!("histogram stats {:?}", histogram);
+
+                // Iterate over buckets and do stuff with their range and count.
+                for bucket in histogram.buckets() {
+                    println!("start:{} end:{} count:{}", bucket.start(), bucket.end(), bucket.count());
+
+                    // TODO add probablility here
+                    let mut rate: f64 = 0f64;
+                    if probability { rate = rate / values.len() as f64; }
+                    else { rate = bucket.count() as f64; }
+                    counter.insert(bucket.start().to_string(), rate);
+                }
             },
             _ => panic!("Unsupported type")
         };
@@ -248,7 +273,7 @@ impl Column {
         // let rates: Vec<f64> = counter.iter().map(|(_, count)| (*count/values.len()) as f64 ).collect();
         if probability {
             for val in counter.values_mut() {
-                *val = *val / values.len() as f64;
+                *val = *val / values.len() as u64;
             }
         }
 
@@ -463,11 +488,10 @@ mod tests {
     fn get_hist_column() {
         let dataframe = DataFrame::from_csv("./test/data/uk_cities_with_headers.csv", None);
         let cols = dataframe.columns();
-        let column = &cols[0];
+        let column = &cols[1];
         println!("values {:?}", column.hist(true));
         // println!("num uniques {:?}", column.uniques().len());
         // assert_eq!(37, column.hist().len());
-
     }
 
     #[test]
