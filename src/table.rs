@@ -5,7 +5,9 @@ use arrow::array::*;
 use arrow::datatypes::*;
 use arrow::record_batch::RecordBatch;
 use arrow::datatypes::DataType;
-use histo::Histogram;
+use histo_fp::Histogram;
+use histo_fp::float::float_type::Float;
+
 use crate::error::*;
 
 #[derive(Clone)]
@@ -219,72 +221,111 @@ impl Column {
         })
     }
 
-    pub fn hist(&self, probability: bool) -> HashMap<String, u64> {
-        let mut counter = HashMap::new();
-        // let mut bin_counter = HashMap::new();
-
+    /// Compute histogram of this column, whenever it is allowed
+    pub fn hist(&self, nbins: u64, density: bool) -> Histogram {
         let values = self.to_array().unwrap();
         let datatype = self.data_type();
-        println!("data type {:?}", datatype);
+        let histogram = Histogram::with_buckets(nbins, None);
 
         match self.data_type() {
-            DataType::Utf8 => {
-                let values = values.as_any().downcast_ref::<StringArray>().unwrap();
+            // TODO hist is not defined for strings
+            // try to parse a string to numeric first?
+            // DataType::Utf8 => {
+            //     // histogram is not defined for this type. Return an empty histogram
+            //     let values = values.as_any().downcast_ref::<StringArray>().unwrap();
+            //     for i in 0..values.len() {
+            //         let elem_counter = counter.entry(values.value(i).to_string()).or_insert(0f64);
+            //         *elem_counter += 1f64;
+            //     }
+            //     let keys: Vec<String> = counter.iter().map(|(key, _)| key.clone()).collect();
+            //     let values: Vec<f64> = counter.iter().map(|(_, value)| value.clone()).collect();
+            //     // (keys, values)
+            //     histogram
+            // },
+
+            DataType::Int64 => {
+                let values = values.as_any().downcast_ref::<Int64Array>().unwrap();
+                // Histogram makes sense only for numeric data
+                let mut histogram = Histogram::with_buckets(nbins, None);
                 for i in 0..values.len() {
-                    let elem_counter = counter.entry(values.value(i).to_string()).or_insert(0u64);
-                    *elem_counter += 1u64;
+                    histogram.add_float(Float{number: values.value(i) as f64});
                 }
+                histogram
+
             },
 
             DataType::Float64 => {
                 let values = values.as_any().downcast_ref::<Float64Array>().unwrap();
-                // TODO add bins and counter per bin
-                // let mut minvalue = values.value(0);
-                // let mut maxvalue = values.value(0);
-                // for i in 0..values.len() {
-                //     if values.value(i) < minvalue { minvalue = values.value(i)}
-                //     if values.value(i) > maxvalue { maxvalue = values.value(i)}
-                // }
-                // println!("min {} max {}", minvalue, maxvalue);
-                // let mut histogram = Histogram::new();
-                let mut histogram = Histogram::with_buckets(10);
+                // Histogram makes sense only for numeric data
+                let mut histogram = Histogram::with_buckets(nbins, None);
+
                 for i in 0..values.len() {
-                    histogram.add(values.value(i) as u64);
-                    // no longer necessary
-                    // let elem_counter = counter.entry(values.value(i).to_string()).or_insert(0u64);
-                    // *elem_counter += 1u64;
+                    let value: f64 = values.value(i);
+                    histogram.add_float(Float{number: value});
                 }
-                println!("histogram stats {:?}", histogram);
 
                 // Iterate over buckets and do stuff with their range and count.
                 for bucket in histogram.buckets() {
                     println!("start:{} end:{} count:{}", bucket.start(), bucket.end(), bucket.count());
-
+                    // bins.push(bucket.start().to_string());
                     // TODO add probablility here
-                    let mut rate: f64 = 0f64;
-                    if probability { rate = rate / values.len() as f64; }
-                    else { rate = bucket.count() as f64; }
-                    counter.insert(bucket.start().to_string(), rate);
-                }
-            },
-            _ => panic!("Unsupported type")
-        };
+                    // if density {
+                    //     counters.push(bucket.count() as f64 / values.len() as f64);
+                    // }
+                    // else {
+                    //     counters.push(bucket.count() as f64);
+                    // }
 
-        // let rates: Vec<f64> = counter.iter().map(|(_, count)| (*count/values.len()) as f64 ).collect();
-        if probability {
-            for val in counter.values_mut() {
-                *val = *val / values.len() as u64;
-            }
+                }
+                histogram
+            },
+
+            _ => panic!("Unsupported type for histogram")
         }
 
-        counter
+        // TODO
+        // let rates: Vec<f64> = counter.iter().map(|(_, count)| (*count/values.len()) as f64 ).collect();
+        // if probability {
+        //     for val in counter.values_mut() {
+        //         *val = *val / values.len() as u64;
+        //     }
+        // }
+        // histogram
     }
 
     pub fn uniques(&self) -> Vec<String> {
-        // compute histogram and take keys
-        let counter = self.hist(true);
-        let unique_values: Vec<String> = counter.iter().map(|(el, count)| el.clone()).collect();
-        unique_values
+        let values = self.to_array().unwrap();
+
+        match self.data_type() {
+            DataType::Float64 => {
+                let mut uniques = HashSet::new();
+                let values = values.as_any().downcast_ref::<Int64Array>().unwrap();
+                for i in 0..values.len() {
+                    let value = values.value(i);
+                    uniques.insert(value);
+                }
+                // WIP
+                // uniques.iter().collect()
+                vec![]
+             },
+
+            DataType::Int64 => {
+                let mut uniques = HashSet::new();
+                let values = values.as_any().downcast_ref::<Int64Array>().unwrap();
+                for i in 0..values.len() {
+                    let value = values.value(i);
+                    uniques.insert(value);
+                }
+
+                // WIP
+                // uniques.iter().collect()
+                vec![]
+
+        },
+
+            _ => panic!("Datatype not supported for uniques.")
+        }
+
     }
 
     fn flatten() {}
@@ -488,10 +529,16 @@ mod tests {
     fn get_hist_column() {
         let dataframe = DataFrame::from_csv("./test/data/uk_cities_with_headers.csv", None);
         let cols = dataframe.columns();
-        let column = &cols[1];
-        println!("values {:?}", column.hist(true));
-        // println!("num uniques {:?}", column.uniques().len());
-        // assert_eq!(37, column.hist().len());
+        let column = &cols[2];
+        let histog = column.hist(10,true);
+        println!("histogram: {}", histog);
+
+        let mut nbuckets = 0;
+        for bucket in histog.buckets() {
+            nbuckets += 1;
+        }
+
+        assert_eq!(nbuckets, 10);
     }
 
     #[test]
