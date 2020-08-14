@@ -228,20 +228,6 @@ impl Column {
         let histogram = Histogram::with_buckets(nbins, None);
 
         match self.data_type() {
-            // TODO hist is not defined for strings
-            // try to parse a string to numeric first?
-            // DataType::Utf8 => {
-            //     // histogram is not defined for this type. Return an empty histogram
-            //     let values = values.as_any().downcast_ref::<StringArray>().unwrap();
-            //     for i in 0..values.len() {
-            //         let elem_counter = counter.entry(values.value(i).to_string()).or_insert(0f64);
-            //         *elem_counter += 1f64;
-            //     }
-            //     let keys: Vec<String> = counter.iter().map(|(key, _)| key.clone()).collect();
-            //     let values: Vec<f64> = counter.iter().map(|(_, value)| value.clone()).collect();
-            //     // (keys, values)
-            //     histogram
-            // },
 
             DataType::Int64 => {
                 let values = values.as_any().downcast_ref::<Int64Array>().unwrap();
@@ -282,50 +268,6 @@ impl Column {
 
             _ => panic!("Unsupported type for histogram")
         }
-
-        // TODO
-        // let rates: Vec<f64> = counter.iter().map(|(_, count)| (*count/values.len()) as f64 ).collect();
-        // if probability {
-        //     for val in counter.values_mut() {
-        //         *val = *val / values.len() as u64;
-        //     }
-        // }
-        // histogram
-    }
-
-    pub fn uniques(&self) -> Vec<String> {
-        let values = self.to_array().unwrap();
-
-        match self.data_type() {
-            DataType::Float64 => {
-                let mut uniques = HashSet::new();
-                let values = values.as_any().downcast_ref::<Int64Array>().unwrap();
-                for i in 0..values.len() {
-                    let value = values.value(i);
-                    uniques.insert(value);
-                }
-                // WIP
-                // uniques.iter().collect()
-                vec![]
-             },
-
-            DataType::Int64 => {
-                let mut uniques = HashSet::new();
-                let values = values.as_any().downcast_ref::<Int64Array>().unwrap();
-                for i in 0..values.len() {
-                    let value = values.value(i);
-                    uniques.insert(value);
-                }
-
-                // WIP
-                // uniques.iter().collect()
-                vec![]
-
-        },
-
-            _ => panic!("Datatype not supported for uniques.")
-        }
-
     }
 
     fn flatten() {}
@@ -540,17 +482,5 @@ mod tests {
 
         assert_eq!(nbuckets, 10);
     }
-
-    // WIP
-    // #[test]
-    // fn get_column_unique_values() {
-    //     let dataframe = DataFrame::from_csv("./test/data/uk_cities_with_headers.csv", None);
-    //     let cols = dataframe.columns();
-    //     let column = &cols[2];
-    //     // println!("values {:?}", column.to_array());
-    //     // println!("num uniques {:?}", column.uniques().len());
-    //     assert_eq!(37, column.uniques().len());
-
-    // }
 
 }
