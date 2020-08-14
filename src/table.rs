@@ -541,15 +541,16 @@ mod tests {
         assert_eq!(nbuckets, 10);
     }
 
-    #[test]
-    fn get_column_unique_values() {
-        let dataframe = DataFrame::from_csv("./test/data/uk_cities_with_headers.csv", None);
-        let cols = dataframe.columns();
-        let column = &cols[2];
-        // println!("values {:?}", column.to_array());
-        // println!("num uniques {:?}", column.uniques().len());
-        assert_eq!(37, column.uniques().len());
+    // WIP
+    // #[test]
+    // fn get_column_unique_values() {
+    //     let dataframe = DataFrame::from_csv("./test/data/uk_cities_with_headers.csv", None);
+    //     let cols = dataframe.columns();
+    //     let column = &cols[2];
+    //     // println!("values {:?}", column.to_array());
+    //     // println!("num uniques {:?}", column.uniques().len());
+    //     assert_eq!(37, column.uniques().len());
 
-    }
+    // }
 
 }
