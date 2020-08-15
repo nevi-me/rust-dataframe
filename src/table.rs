@@ -7,6 +7,7 @@ use arrow::record_batch::RecordBatch;
 use arrow::datatypes::DataType;
 use histo_fp::Histogram;
 use histo_fp::float::float_type::Float;
+use noisy_float::prelude::*;
 
 use crate::error::*;
 
@@ -137,8 +138,27 @@ pub struct Column {
     field: arrow::datatypes::Field,
 }
 
+/// Generic type that encapsulates vecs of primitive types
+#[derive(Debug, Clone)]
+pub enum GenericVector {
+    I(Vec<i64>),
+    F(Vec<R64>),
+    S(Vec<String>),
+}
 
-impl Column {
+
+impl GenericVector {
+    fn len(&self) -> usize {
+            match self {
+                Self::I(v) => v.len(),
+                Self::F(v) => v.len(),
+                Self::S(v) => v.len()
+            }
+        }
+
+}
+
+impl <'a> Column {
     pub fn from_chunked_array(chunk: ChunkedArray, field: arrow::datatypes::Field) -> Self {
         Column { data: chunk, field }
     }
@@ -268,6 +288,57 @@ impl Column {
 
             _ => panic!("Unsupported type for histogram")
         }
+    }
+
+
+    pub fn uniques(&'a self) -> Result<GenericVector> {
+
+        let values = self.to_array().unwrap();
+
+        match self.data_type() {
+            DataType::Float64 => {
+                let mut uniques = HashSet::new();
+                let values = values.as_any().downcast_ref::<Float64Array>().unwrap();
+                for i in 0..values.len() {
+                    let value = values.value(i) as f64;
+                    let value = r64(value);
+                    uniques.insert(value);
+                }
+                let v: Vec<_> = uniques.to_owned().into_iter().collect();
+                let v = v.to_owned().to_vec();
+                Ok(GenericVector::F(v))
+             },
+
+            DataType::Utf8 => {
+                let mut uniques: HashSet<String> = HashSet::new();
+                // let values: Arc<dyn Array> = self.to_array().unwrap();
+                let values = values.as_any().downcast_ref::<StringArray>().unwrap();
+
+                for i in 0..values.len() {
+                    let value: &str = values.value(i);
+                    uniques.insert(value.to_string());
+                }
+                let v: Vec<String> = uniques.into_iter().collect();
+                // let v = v.to_owned().to_vec();
+                Ok(GenericVector::S(v))
+
+            },
+
+            DataType::Int64 => {
+                let mut uniques = HashSet::new();
+                let values = values.as_any().downcast_ref::<Int64Array>().unwrap();
+                for i in 0..values.len() {
+                    let value = values.value(i);
+                    uniques.insert(value);
+                }
+                let v: Vec<_> = uniques.to_owned().into_iter().collect();
+                let v = v.to_owned().to_vec();
+                Ok(GenericVector::I(v))
+        },
+
+            _ => panic!("Datatype not supported for uniques.")
+        }
+
     }
 
     fn flatten() {}
@@ -481,6 +552,18 @@ mod tests {
         }
 
         assert_eq!(nbuckets, 10);
+    }
+
+    #[test]
+    fn get_column_unique_values() {
+        let dataframe = DataFrame::from_csv("./test/data/uk_cities_with_headers.csv", None);
+        let cols = dataframe.columns();
+        let column = &cols[1];
+        let uniques = column.uniques();
+        let nuniques = uniques.clone().unwrap().len();
+        println!("uniques: {:?} size:{}", uniques, nuniques);
+        assert_eq!(37, nuniques);
+
     }
 
 }
