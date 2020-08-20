@@ -6,7 +6,6 @@ use arrow::datatypes::*;
 use arrow::record_batch::RecordBatch;
 use arrow::datatypes::DataType;
 use histo_fp::Histogram;
-use histo_fp::float::float_type::Float;
 use noisy_float::prelude::*;
 
 use crate::error::*;
@@ -254,7 +253,7 @@ impl <'a> Column {
                 // Histogram makes sense only for numeric data
                 let mut histogram = Histogram::with_buckets(nbins, None);
                 for i in 0..values.len() {
-                    histogram.add_float(Float{number: values.value(i) as f64});
+                    histogram.add(values.value(i) as f64);
                 }
                 histogram
 
@@ -267,7 +266,7 @@ impl <'a> Column {
 
                 for i in 0..values.len() {
                     let value: f64 = values.value(i);
-                    histogram.add_float(Float{number: value});
+                    histogram.add(value);
                 }
 
                 // Iterate over buckets and do stuff with their range and count.
