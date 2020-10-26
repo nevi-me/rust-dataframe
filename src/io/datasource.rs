@@ -1,15 +1,15 @@
 //! Data source evaluators and readers
 
 use std::fs::File;
-use std::rc::Rc;
+use std::{io::Read, rc::Rc};
 
 use arrow::csv::{Reader as CsvReader, ReaderBuilder as CsvBuilder};
-use arrow::ipc::reader::FileReader as ArrowFileReader;
+use arrow::{datatypes::SchemaRef, ipc::reader::FileReader as ArrowFileReader, record_batch::RecordBatch};
 use parquet::arrow::{ArrowReader, ParquetFileArrowReader};
 use parquet::file::reader::SerializedFileReader;
 
 use crate::error::{DataFrameError, Result};
-use crate::expression::{DataSourceType, Dataset, Reader, SqlDatabase};
+use crate::expression::{DataSourceType, Dataset, Reader, SqlDatabase, SortCriteria, BooleanFilter};
 use crate::io::sql::postgres;
 use crate::io::sql::SqlDataSource;
 
@@ -82,4 +82,92 @@ impl DataSourceEval for Reader {
             },
         }
     }
+}
+
+pub trait DataSource {
+    fn get_dataset(&self) -> Result<Dataset>;
+    fn source(&self) -> DataSourceType;
+    fn format(&self) -> &str;
+    fn schema(&self) -> arrow::datatypes::SchemaRef;
+    fn next_batch(&mut self) -> Result<Option<RecordBatch>>;
+
+    fn supports_projection(&self) -> bool {
+        false
+    }
+    fn supports_filtering(&self) -> bool {
+        false
+    }
+    fn supports_sorting(&self) -> bool {
+        false
+    }
+    fn supports_limit(&self) -> bool {
+        false
+    }
+
+    fn limit(&mut self, limit: usize) -> Result<()>;
+    fn filter(&mut self, filter: BooleanFilter) -> Result<()>;
+    fn project(&mut self, columns: Vec<String>) -> Result<()>;
+    fn sort(&mut self, criteria: Vec<SortCriteria>) -> Result<()>;
+}
+
+pub struct CsvDataSource<R: Read> {
+    path: String,
+    options: CsvSourceOptions,
+    projection: Vec<String>,
+    limit: Option<usize>,
+    read_schema: SchemaRef,
+    projected_schema: SchemaRef,
+    reader: arrow::csv::Reader<R>,
+    
+}
+
+pub struct CsvSourceOptions {
+    infer_schema: bool,
+    read_schema: Option<SchemaRef>,
+    has_header: bool,
+    delimiter: Option<u8>,
+    projection: Option<Vec<usize>>
+}
+
+impl<R: Read> DataSource for CsvDataSource<R> {
+    
+    fn get_dataset(&self) -> Result<Dataset> {
+        todo!()
+    }
+    fn source(&self) -> DataSourceType {
+        todo!()
+    }
+    fn format(&self) -> &str {
+        "csv"
+    }
+    fn schema(&self) -> SchemaRef {
+        todo!()
+    }
+    fn next_batch(&mut self) -> Result<Option<RecordBatch>> {
+        todo!()
+    }
+    fn limit(&mut self, limit: usize) -> Result<()> {
+        todo!()
+    }
+    fn filter(&mut self, filter: BooleanFilter) -> Result<()> {
+        todo!()
+    }
+    fn project(&mut self, columns: Vec<String>) -> Result<()> {
+        todo!()
+    }
+    fn sort(&mut self, criteria: Vec<SortCriteria>) -> Result<()> {
+        todo!()
+    }
+    fn supports_projection(&self) -> bool {
+        true
+    }
+    fn supports_filtering(&self) -> bool {
+        false
+    }
+    fn supports_sorting(&self) -> bool {
+        false
+    }
+    fn supports_limit(&self) -> bool {
+        true
+    }    
 }

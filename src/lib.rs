@@ -15,3 +15,4 @@ pub mod operation;
 pub mod optimiser;
 pub mod table;
 pub mod utils;
+pub mod context;
