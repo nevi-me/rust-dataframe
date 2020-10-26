@@ -303,8 +303,8 @@ impl <'a> Column {
                     let value = r64(value);
                     uniques.insert(value);
                 }
-                let v: Vec<_> = uniques.to_owned().into_iter().collect();
-                let v = v.to_owned().to_vec();
+                let v: Vec<_> = uniques.into_iter().collect();
+                let v = v.to_vec();
                 Ok(GenericVector::F(v))
              },
 
@@ -330,8 +330,8 @@ impl <'a> Column {
                     let value = values.value(i);
                     uniques.insert(value);
                 }
-                let v: Vec<_> = uniques.to_owned().into_iter().collect();
-                let v = v.to_owned().to_vec();
+                let v: Vec<_> = uniques.into_iter().collect();
+                let v = v.to_vec();
                 Ok(GenericVector::I(v))
         },
 
