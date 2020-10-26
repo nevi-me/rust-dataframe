@@ -1,8 +1,12 @@
 use std::sync::{Arc, Mutex};
-
+use std::rc::Rc;
+use std::collections::{HashMap, HashSet};
 use arrow::array::*;
 use arrow::datatypes::*;
 use arrow::record_batch::RecordBatch;
+use arrow::datatypes::DataType;
+use histo_fp::Histogram;
+use noisy_float::prelude::*;
 
 use crate::error::*;
 
@@ -133,7 +137,27 @@ pub struct Column {
     field: arrow::datatypes::Field,
 }
 
-impl Column {
+/// Generic type that encapsulates vecs of primitive types
+#[derive(Debug, Clone)]
+pub enum GenericVector {
+    I(Vec<i64>),
+    F(Vec<R64>),
+    S(Vec<String>),
+}
+
+
+impl GenericVector {
+    fn len(&self) -> usize {
+            match self {
+                Self::I(v) => v.len(),
+                Self::F(v) => v.len(),
+                Self::S(v) => v.len()
+            }
+        }
+
+}
+
+impl <'a> Column {
     pub fn from_chunked_array(chunk: ChunkedArray, field: arrow::datatypes::Field) -> Self {
         Column { data: chunk, field }
     }
@@ -216,6 +240,106 @@ impl Column {
         })
     }
 
+    /// Compute histogram of this column, whenever it is allowed
+    pub fn hist(&self, nbins: u64, density: bool) -> Histogram {
+        let values = self.to_array().unwrap();
+        let datatype = self.data_type();
+        let histogram = Histogram::with_buckets(nbins, None);
+
+        match self.data_type() {
+
+            DataType::Int64 => {
+                let values = values.as_any().downcast_ref::<Int64Array>().unwrap();
+                // Histogram makes sense only for numeric data
+                let mut histogram = Histogram::with_buckets(nbins, None);
+                for i in 0..values.len() {
+                    histogram.add(values.value(i) as f64);
+                }
+                histogram
+
+            },
+
+            DataType::Float64 => {
+                let values = values.as_any().downcast_ref::<Float64Array>().unwrap();
+                // Histogram makes sense only for numeric data
+                let mut histogram = Histogram::with_buckets(nbins, None);
+
+                for i in 0..values.len() {
+                    let value: f64 = values.value(i);
+                    histogram.add(value);
+                }
+
+                // Iterate over buckets and do stuff with their range and count.
+                for bucket in histogram.buckets() {
+                    println!("start:{} end:{} count:{}", bucket.start(), bucket.end(), bucket.count());
+                    // bins.push(bucket.start().to_string());
+                    // TODO add probablility here
+                    // if density {
+                    //     counters.push(bucket.count() as f64 / values.len() as f64);
+                    // }
+                    // else {
+                    //     counters.push(bucket.count() as f64);
+                    // }
+
+                }
+                histogram
+            },
+
+            _ => panic!("Unsupported type for histogram")
+        }
+    }
+
+
+    pub fn uniques(&'a self) -> Result<GenericVector> {
+
+        let values = self.to_array().unwrap();
+
+        match self.data_type() {
+            DataType::Float64 => {
+                let mut uniques = HashSet::new();
+                let values = values.as_any().downcast_ref::<Float64Array>().unwrap();
+                for i in 0..values.len() {
+                    let value = values.value(i) as f64;
+                    let value = r64(value);
+                    uniques.insert(value);
+                }
+                let v: Vec<_> = uniques.to_owned().into_iter().collect();
+                let v = v.to_owned().to_vec();
+                Ok(GenericVector::F(v))
+             },
+
+            DataType::Utf8 => {
+                let mut uniques: HashSet<String> = HashSet::new();
+                // let values: Arc<dyn Array> = self.to_array().unwrap();
+                let values = values.as_any().downcast_ref::<StringArray>().unwrap();
+
+                for i in 0..values.len() {
+                    let value: &str = values.value(i);
+                    uniques.insert(value.to_string());
+                }
+                let v: Vec<String> = uniques.into_iter().collect();
+                // let v = v.to_owned().to_vec();
+                Ok(GenericVector::S(v))
+
+            },
+
+            DataType::Int64 => {
+                let mut uniques = HashSet::new();
+                let values = values.as_any().downcast_ref::<Int64Array>().unwrap();
+                for i in 0..values.len() {
+                    let value = values.value(i);
+                    uniques.insert(value);
+                }
+                let v: Vec<_> = uniques.to_owned().into_iter().collect();
+                let v = v.to_owned().to_vec();
+                Ok(GenericVector::I(v))
+        },
+
+            _ => panic!("Datatype not supported for uniques.")
+        }
+
+    }
+
     fn flatten() {}
 }
 
@@ -256,7 +380,6 @@ impl Table {
         self.columns[0].data().num_rows()
     }
 
-    // keep fn
     pub fn column(&self, i: usize) -> &Column {
         &self.columns[i]
     }
@@ -265,6 +388,7 @@ impl Table {
         &self.columns
     }
 
+    /// Add column to dataframe inplace
     fn add_column(&mut self, new_column: Column) {
         if !self.columns.is_empty() {
             let nrows = new_column.num_rows();
@@ -281,6 +405,7 @@ impl Table {
         self.schema = Arc::new(Schema::new(schema_fields));
     }
 
+    /// Remove column from dataframe inplace
     fn remove_column(&mut self, i: usize) {
         assert_eq!(
             i < self.columns().len(),
@@ -419,4 +544,33 @@ mod tests {
         let after_num_cols = table.columns().len();
         assert!(after_num_cols > before_num_cols);
     }
+
+    #[test]
+    fn get_hist_column() {
+        let dataframe = DataFrame::from_csv("./test/data/uk_cities_with_headers.csv", None);
+        let cols = dataframe.columns();
+        let column = &cols[2];
+        let histog = column.hist(10,true);
+        println!("histogram: {}", histog);
+
+        let mut nbuckets = 0;
+        for bucket in histog.buckets() {
+            nbuckets += 1;
+        }
+
+        assert_eq!(nbuckets, 10);
+    }
+
+    #[test]
+    fn get_column_unique_values() {
+        let dataframe = DataFrame::from_csv("./test/data/uk_cities_with_headers.csv", None);
+        let cols = dataframe.columns();
+        let column = &cols[1];
+        let uniques = column.uniques();
+        let nuniques = uniques.clone().unwrap().len();
+        println!("uniques: {:?} size:{}", uniques, nuniques);
+        assert_eq!(37, nuniques);
+
+    }
+
 }
