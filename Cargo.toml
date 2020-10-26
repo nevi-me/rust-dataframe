@@ -5,8 +5,12 @@ authors = ["Neville Dipale <nevilledips@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-arrow = { git = "https://github.com/apache/arrow" }
-parquet = { git = "https://github.com/apache/arrow" }
+# arrow = { git = "https://github.com/apache/arrow" }
+arrow = { git = "https://github.com/apache/arrow", branch = "rust-parquet-arrow-writer", features = ["prettyprint", "simd"] }
+# arrow = { path = "../arrow/rust/arrow" }
+# parquet = { git = "https://github.com/apache/arrow" }
+parquet = { git = "https://github.com/apache/arrow", branch = "rust-parquet-arrow-writer", features = ["arrow"] }
+# parquet = { path = "../arrow/rust/parquet" }
 num = "0.3"
 num-traits = "0.2"
 csv = "1"
