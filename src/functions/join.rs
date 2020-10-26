@@ -221,6 +221,7 @@ fn populate_primitive_bytes<T: ArrowPrimitiveType>(
 ) {
     let array = array.as_any().downcast_ref::<PrimitiveArray<T>>().unwrap();
     // check if array element is null?
+    #[allow(clippy::needless_range_loop)]
     for i in 0..array.len() {
         if !array.is_null(i) && !null_set.contains(&i) {
             // array contains value, append bytes

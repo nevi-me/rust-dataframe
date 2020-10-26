@@ -183,17 +183,19 @@ impl RecordBatchReader for PostgresReadIterator {
     fn schema(&self) -> arrow::datatypes::SchemaRef {
         Arc::new(self.schema.clone())
     }
+
     fn next_batch(&mut self) -> arrow::error::Result<Option<RecordBatch>> {
-        self.read_batch().map_err(|_| {
-            arrow::error::ArrowError::IoError("Unable to read record batch".to_string())
-        })
+        self.next().transpose()
     }
 }
 
 impl Iterator for PostgresReadIterator {
-    type Item = crate::error::Result<RecordBatch>;
+    type Item = arrow::error::Result<RecordBatch>;
     fn next(&mut self) -> Option<Self::Item> {
-        self.read_batch().transpose()
+        self.read_batch().map_err(|e| {
+            eprintln!("Postgres error: {:?}", e);
+            arrow::error::ArrowError::IoError("Postgres error".to_string())
+        }).transpose()
     }
 }
 
@@ -597,7 +599,7 @@ where
                         f.data_type().clone(),
                         n.len(),
                         Some(null_count),
-                        Some(null_buffer), // TODO: add null_bit_buffer
+                        Some(null_buffer),
                         0,
                         vec![bool_buffer],
                         vec![],
@@ -625,7 +627,7 @@ where
                         f.data_type().clone(),
                         n.len(),
                         Some(null_count),
-                        Some(null_buffer), // TODO: add null_bit_buffer
+                        Some(null_buffer),
                         0,
                         vec![Buffer::from(b)],
                         vec![],
@@ -638,7 +640,7 @@ where
                         f.data_type().clone(),
                         n.len(),
                         Some(null_count),
-                        Some(null_buffer), // TODO: add null_bit_buffer
+                        Some(null_buffer),
                         0,
                         vec![Buffer::from(b)],
                         vec![],
@@ -669,7 +671,7 @@ where
                         f.data_type().clone(),
                         n.len(),
                         Some(null_count),
-                        Some(null_buffer), // TODO: add null_bit_buffer
+                        Some(null_buffer),
                         0,
                         vec![Buffer::from(b)],
                         vec![],
@@ -681,7 +683,7 @@ where
                         f.data_type().clone(),
                         n.len(),
                         Some(null_count),
-                        Some(null_buffer), // TODO: add null_bit_buffer
+                        Some(null_buffer),
                         0,
                         vec![Buffer::from(b)],
                         vec![],

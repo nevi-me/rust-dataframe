@@ -133,7 +133,6 @@ pub struct Column {
     field: arrow::datatypes::Field,
 }
 
-
 impl Column {
     pub fn from_chunked_array(chunk: ChunkedArray, field: arrow::datatypes::Field) -> Self {
         Column { data: chunk, field }
@@ -267,9 +266,13 @@ impl Table {
     }
 
     fn add_column(&mut self, new_column: Column) {
-        if self.columns.len() > 0 {
+        if !self.columns.is_empty() {
             let nrows = new_column.num_rows();
-            assert_eq!(nrows, self.columns[0].num_rows(), "Columns must have equal number of rows");
+            assert_eq!(
+                nrows,
+                self.columns[0].num_rows(),
+                "Columns must have equal number of rows"
+            );
         }
         self.columns.push(new_column.clone());
         let new_field = new_column.field().clone();
@@ -279,7 +282,11 @@ impl Table {
     }
 
     fn remove_column(&mut self, i: usize) {
-        assert_eq!(i < self.columns().len(), true, "Index of column does not exist" );
+        assert_eq!(
+            i < self.columns().len(),
+            true,
+            "Index of column does not exist"
+        );
         let mut fields = self.schema().fields().clone();
         self.columns.remove(i);
         fields.remove(i);
@@ -382,7 +389,7 @@ mod tests {
 
     #[test]
     fn create_table_from_csv() {
-        let mut dataframe = DataFrame::from_csv("./test/data/uk_cities_with_headers.csv", None);
+        let dataframe = DataFrame::from_csv("./test/data/uk_cities_with_headers.csv", None);
         let cols = dataframe.columns();
         let schema = dataframe.schema().clone();
         let table = Table::new(schema, cols.to_vec());
@@ -411,6 +418,5 @@ mod tests {
         table.add_column(cols[0].clone());
         let after_num_cols = table.columns().len();
         assert!(after_num_cols > before_num_cols);
-
     }
 }

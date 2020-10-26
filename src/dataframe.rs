@@ -82,7 +82,7 @@ impl DataFrame {
     pub fn columns(&self) -> &Vec<Column> {
         &self.columns
     }
-    
+
     pub fn column_by_name(&self, name: &str) -> &Column {
         let column_number = self
             .schema
@@ -361,7 +361,7 @@ impl DataFrame {
         let mut batches: Vec<RecordBatch> = vec![];
         let mut has_next = true;
         while has_next {
-            match reader.next() {
+            match reader.next().transpose() {
                 Ok(batch) => match batch {
                     Some(batch) => {
                         batches.push(batch);
@@ -394,7 +394,7 @@ impl DataFrame {
         let schema = reader.schema();
         let mut batches = vec![];
 
-        while let Some(batch) = reader.next_batch()? {
+        while let Some(batch) = reader.next().transpose()? {
             batches.push(batch);
         }
 
@@ -475,7 +475,7 @@ impl DataFrame {
             }
 
             let mut record_batch_reader = arrow_reader.get_record_reader(1024)?;
-            while let Ok(Some(batch)) = record_batch_reader.next_batch() {
+            while let Ok(Some(batch)) = record_batch_reader.next().transpose() {
                 batches.push(batch);
             }
         }
@@ -525,7 +525,6 @@ impl DataFrame {
     }
 
     pub fn to_csv(&self, path: &str) -> Result<()> {
-        // use csv::error::Error;
         use arrow::csv::Writer;
 
         let file = File::create(path)?;
@@ -539,6 +538,23 @@ impl DataFrame {
             .collect();
 
         results?;
+
+        Ok(())
+    }
+
+    pub fn to_parquet(&self, path: &str) -> Result<()> {
+        use parquet::arrow::arrow_writer::ArrowWriter;
+
+        let file = File::create(path)?;
+        let mut writer = ArrowWriter::try_new(file, self.schema().clone(), None)?;
+
+        let batches = self.to_record_batches();
+        let results: Result<Vec<_>> = batches
+            .iter()
+            .map(|b| writer.write(b).map_err(|e| e.into()))
+            .collect();
+        results?;
+        writer.close()?;
 
         Ok(())
     }
@@ -889,6 +905,41 @@ mod tests {
 
         let write = dataframe.to_csv("target/uk_cities_out.csv");
         assert!(write.is_ok());
+    }
+
+    #[test]
+    fn test_parquet_io() {
+        let mut dataframe = DataFrame::from_csv("./test/data/uk_cities_with_headers.csv", None);
+        let a = dataframe.column_by_name("lat");
+        let b = dataframe.column_by_name("lng");
+        let sum = ScalarFunctions::add(
+            col_to_prim_arrays::<Float64Type>(a),
+            col_to_prim_arrays::<Float64Type>(b),
+        );
+        // TODO, make this better
+        let sum: Vec<ArrayRef> = sum
+            .unwrap()
+            .into_iter()
+            .map(|p| Arc::new(p) as ArrayRef)
+            .collect();
+        dataframe = dataframe.with_column(
+            "lat_lng_sum",
+            Column::from_arrays(sum, Field::new("lat_lng_sum", DataType::Float64, true)),
+        );
+
+        let city = dataframe.column_by_name("city");
+        let lowercase = ScalarFunctions::lower(col_to_string_arrays(city));
+        let lowercase: Vec<ArrayRef> = lowercase
+            .unwrap()
+            .into_iter()
+            .map(|p| Arc::new(p) as ArrayRef)
+            .collect();
+        dataframe = dataframe.with_column(
+            "city_lower",
+            Column::from_arrays(lowercase, Field::new("city_lower", DataType::Utf8, true)),
+        );
+
+        let write = dataframe.to_parquet("target/uk_cities_out.parquet").unwrap();
     }
 
     #[test]
